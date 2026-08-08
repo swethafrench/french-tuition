@@ -1,158 +1,182 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { Pencil, Trash2, X, Check } from 'lucide-react'
 import api from '@/lib/api'
+import { Student } from '@/types'
 
-export default function RegisterStudentPage() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+interface Batch { id: string; name: string; days: number[]; start_time: string; end_time: string }
 
-  const [form, setForm] = useState({
-    reg_number: 'FT-2026-00' + Math.floor(Math.random() * 900 + 100),
-    name: '',
-    mobile: '',
-    parent_name: '',
-    school_name: '',
-    grade: '',
-    mode: 'online',
-    monthly_fee: '',
-    payment_cycle: 'monthly',
-    due_day: '5',
-    passcode: '',
-  })
+const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+export default function StudentsPage() {
+  const [students, setStudents] = useState<Student[]>([])
+  const [batches, setBatches] = useState<Batch[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ grade: '', batch_id: '' })
+  const [saving, setSaving] = useState(false)
 
-  const handleSubmit = async () => {
-    setError('')
-    setSuccess('')
-    if (!form.name || !form.mobile || !form.passcode) {
-      setError('Name, mobile, and passcode are required.')
-      return
-    }
-    if (form.passcode.length !== 4 || !/^\d+$/.test(form.passcode)) {
-      setError('Passcode must be exactly 4 digits.')
-      return
-    }
-    setLoading(true)
-    try {
-      await api.post('/api/students', {
-        ...form,
-        monthly_fee: parseFloat(form.monthly_fee) || 0,
-        due_day: parseInt(form.due_day),
-      })
-      setSuccess('Student registered successfully!')
-      setForm(f => ({ ...f, name: '', mobile: '', parent_name: '', school_name: '', grade: '', monthly_fee: '', passcode: '' }))
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } }
-      setError(err.response?.data?.detail || 'Registration failed. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+  const load = () => {
+    Promise.all([
+      api.get('/api/students'),
+      api.get('/api/batches'),
+    ]).then(([s, b]) => {
+      setStudents(s.data)
+      setBatches(b.data)
+    }).finally(() => setLoading(false))
   }
 
-  return (
-    <div className="p-6 max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Register new student</h1>
-        <p className="text-sm text-gray-500 mt-1">Fill in the details to add a student to your tuition.</p>
-      </div>
+  useEffect(() => { load() }, [])
 
-      {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
-      )}
-      {success && (
-        <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{success}</div>
-      )}
+  const startEdit = (s: Student) => {
+    setEditId(s.id)
+    setEditForm({ grade: s.grade ?? '', batch_id: (s as unknown as { batch_id?: string }).batch_id ?? '' })
+  }
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Personal details</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Registration number">
-            <input className={input} value={form.reg_number} onChange={e => set('reg_number', e.target.value)} />
-          </Field>
-          <Field label="Student name *">
-            <input className={input} placeholder="Full name" value={form.name} onChange={e => set('name', e.target.value)} />
-          </Field>
-          <Field label="Mobile number *">
-            <input className={input} placeholder="+91 98765 43210" value={form.mobile} onChange={e => set('mobile', e.target.value)} />
-          </Field>
-          <Field label="Parent name">
-            <input className={input} placeholder="Parent or guardian name" value={form.parent_name} onChange={e => set('parent_name', e.target.value)} />
-          </Field>
-          <Field label="School name">
-            <input className={input} placeholder="School name" value={form.school_name} onChange={e => set('school_name', e.target.value)} />
-          </Field>
-          <Field label="Grade">
-            <select className={input} value={form.grade} onChange={e => set('grade', e.target.value)}>
-              <option value="">Select grade</option>
-              {['Grade 6','Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12'].map(g => (
-                <option key={g}>{g}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Mode of class">
-            <select className={input} value={form.mode} onChange={e => set('mode', e.target.value)}>
-              <option value="online">Online</option>
-              <option value="direct">Direct (in-person)</option>
-            </select>
-          </Field>
-          <Field label="Login passcode (4-digit PIN) *">
-            <input className={input} placeholder="e.g. 1234" maxLength={4} value={form.passcode} onChange={e => set('passcode', e.target.value)} />
-          </Field>
-        </div>
-      </div>
+  const saveEdit = async (id: string) => {
+    setSaving(true)
+    await api.patch(`/api/students/${id}`, editForm)
+    setEditId(null)
+    load()
+    setSaving(false)
+  }
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Fee details</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Monthly fee (Rs.)">
-            <input className={input} placeholder="e.g. 1800" type="number" value={form.monthly_fee} onChange={e => set('monthly_fee', e.target.value)} />
-          </Field>
-          <Field label="Payment cycle">
-            <select className={input} value={form.payment_cycle} onChange={e => set('payment_cycle', e.target.value)}>
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-              <option value="half-yearly">Half-yearly</option>
-              <option value="annual">Annual</option>
-            </select>
-          </Field>
-          <Field label="Fee due day">
-            <select className={input} value={form.due_day} onChange={e => set('due_day', e.target.value)}>
-              {['1','5','10','15','20'].map(d => (
-                <option key={d} value={d}>{d + 'th of month'}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-      </div>
+  const deleteStudent = async (id: string) => {
+    if (!confirm('Are you sure you want to deactivate this student?')) return
+    await api.delete(`/api/students/${id}`)
+    load()
+  }
 
-      <div className="flex gap-3 justify-end">
-        <button onClick={() => router.push('/teacher/dashboard')} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
-          Cancel
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? 'Registering...' : 'Register student'}
-        </button>
-      </div>
+  const gradeOptions = ['Grade 6','Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12']
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-full">
+      <p className="text-gray-400 text-sm">Loading students...</p>
     </div>
   )
-}
 
-const input = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1.5">{label}</label>
-      {children}
+    <div className="p-6">
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Students</h1>
+          <p className="text-sm text-gray-500 mt-1">{students.length} active students</p>
+        </div>
+        <a href="/teacher/register" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+          + Register new student
+        </a>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+              <th className="text-left px-5 py-3 font-medium">Student</th>
+              <th className="text-left px-5 py-3 font-medium">Mobile</th>
+              <th className="text-left px-5 py-3 font-medium">School</th>
+              <th className="text-left px-5 py-3 font-medium">Grade</th>
+              <th className="text-left px-5 py-3 font-medium">Batch</th>
+              <th className="text-left px-5 py-3 font-medium">Mode</th>
+              <th className="text-left px-5 py-3 font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {students.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-5 py-8 text-center text-gray-400">
+                  No students registered yet.
+                </td>
+              </tr>
+            ) : students.map(s => {
+              const isEditing = editId === s.id
+              const batch = batches.find(b => b.id === (s as unknown as { batch_id?: string }).batch_id)
+              return (
+                <tr key={s.id} className={`hover:bg-gray-50 ${isEditing ? 'bg-blue-50' : ''}`}>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold">
+                        {s.name.split(' ').map((n: string) => n[0]).join('').slice(0,2)}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{s.name}</p>
+                        <p className="text-xs text-gray-400">{s.reg_number}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-gray-600">{s.mobile}</td>
+                  <td className="px-5 py-3 text-gray-600">{s.school_name}</td>
+                  <td className="px-5 py-3">
+                    {isEditing ? (
+                      <select
+                        className="px-2 py-1 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={editForm.grade}
+                        onChange={e => setEditForm(f => ({ ...f, grade: e.target.value }))}
+                      >
+                        {gradeOptions.map(g => <option key={g}>{g}</option>)}
+                      </select>
+                    ) : (
+                      <span className="text-gray-700">{s.grade ?? '-'}</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3">
+                    {isEditing ? (
+                      <select
+                        className="px-2 py-1 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={editForm.batch_id}
+                        onChange={e => setEditForm(f => ({ ...f, batch_id: e.target.value }))}
+                      >
+                        <option value="">No batch</option>
+                        {batches.map(b => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} ({b.days.map((d: number) => DAY_NAMES[d]).join(',')})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-gray-700">
+                        {batch ? (
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                            {batch.name}
+                          </span>
+                        ) : '-'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.mode === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {s.mode}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      {isEditing ? (
+                        <>
+                          <button onClick={() => saveEdit(s.id)} disabled={saving} className="p-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200">
+                            <Check size={14} />
+                          </button>
+                          <button onClick={() => setEditId(null)} className="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                            <X size={14} />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => startEdit(s)} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => deleteStudent(s.id)} className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
