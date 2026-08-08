@@ -40,7 +40,7 @@ export default function EditStudentPage() {
 
   useEffect(() => {
     Promise.all([
-      api.get(`/api/students`),
+      api.get('/api/students'),
       api.get('/api/schools'),
       api.get('/api/batches'),
     ]).then(([s, sc, b]) => {
@@ -81,11 +81,21 @@ export default function EditStudentPage() {
     }
     setSaving(true)
     try {
-      await api.patch(`/api/students/${id}`, {
-        ...form,
+      const payload = {
+        reg_number: form.reg_number,
+        name: form.name,
+        mobile: form.mobile,
+        parent_name: form.parent_name || null,
+        school_name: form.school_name || null,
+        school_id: form.school_id || null,
+        grade: form.grade || null,
+        mode: form.mode,
+        batch_id: form.batch_id || null,
         monthly_fee: parseFloat(form.monthly_fee) || 0,
+        payment_cycle: form.payment_cycle,
         due_day: parseInt(form.due_day),
-      })
+      }
+      await api.patch(`/api/students/${id}`, payload)
       setSuccess('Student updated successfully.')
       setTimeout(() => router.push('/teacher/students'), 1000)
     } catch (e: unknown) {
@@ -152,7 +162,7 @@ export default function EditStudentPage() {
           </Field>
           <Field label="Batch">
             <select className={inp} value={form.batch_id} onChange={e => set('batch_id', e.target.value)}>
-              <option value="">Select batch</option>
+              <option value="">No batch</option>
               {batches.map(b => (
                 <option key={b.id} value={b.id}>
                   {b.name} - {b.days.map((d: number) => DAY_NAMES[d]).join(',')} {b.start_time.slice(0,5)} to {b.end_time.slice(0,5)}
