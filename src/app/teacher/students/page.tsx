@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pencil, Trash2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import api from '@/lib/api'
 
 interface Student {
@@ -33,14 +34,14 @@ export default function StudentsPage() {
   const [batches, setBatches] = useState<Batch[]>([])
   const [loading, setLoading] = useState(true)
 
-  const load = () => {
-    Promise.all([
-      api.get('/api/students'),
-      api.get('/api/batches'),
-    ]).then(([s, b]) => {
-      setStudents(s.data)
-      setBatches(b.data)
-    }).finally(() => setLoading(false))
+  const load = async () => {
+    const [{ data: s }, { data: b }] = await Promise.all([
+      supabase.from('students').select('*').eq('is_active', true).order('name'),
+      supabase.from('batches').select('*').eq('is_active', true).order('name'),
+    ])
+    setStudents(s ?? [])
+    setBatches(b ?? [])
+    setLoading(false)
   }
 
   useEffect(() => { load() }, [])
