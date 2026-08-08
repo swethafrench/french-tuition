@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Pencil, Trash2, X, Check } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Pencil, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { Student } from '@/types'
 
@@ -10,12 +11,10 @@ interface Batch { id: string; name: string; days: number[]; start_time: string; 
 const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 
 export default function StudentsPage() {
+  const router = useRouter()
   const [students, setStudents] = useState<Student[]>([])
   const [batches, setBatches] = useState<Batch[]>([])
   const [loading, setLoading] = useState(true)
-  const [editId, setEditId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ grade: '', batch_id: '' })
-  const [saving, setSaving] = useState(false)
 
   const load = () => {
     Promise.all([
@@ -29,26 +28,11 @@ export default function StudentsPage() {
 
   useEffect(() => { load() }, [])
 
-  const startEdit = (s: Student) => {
-    setEditId(s.id)
-    setEditForm({ grade: s.grade ?? '', batch_id: (s as unknown as { batch_id?: string }).batch_id ?? '' })
-  }
-
-  const saveEdit = async (id: string) => {
-    setSaving(true)
-    await api.patch(`/api/students/${id}`, editForm)
-    setEditId(null)
-    load()
-    setSaving(false)
-  }
-
-  const deleteStudent = async (id: string) => {
-    if (!confirm('Are you sure you want to deactivate this student?')) return
+  const deleteStudent = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to deactivate ${name}?`)) return
     await api.delete(`/api/students/${id}`)
     load()
   }
-
-  const gradeOptions = ['Grade 6','Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12']
 
   if (loading) return (
     <div className="flex items-center justify-center h-full">
@@ -63,9 +47,12 @@ export default function StudentsPage() {
           <h1 className="text-xl font-semibold text-gray-900">Students</h1>
           <p className="text-sm text-gray-500 mt-1">{students.length} active students</p>
         </div>
-        <a href="/teacher/register" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+        <button
+          onClick={() => router.push('/teacher/register')}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+        >
           + Register new student
-        </a>
+        </button>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200">
@@ -89,10 +76,9 @@ export default function StudentsPage() {
                 </td>
               </tr>
             ) : students.map(s => {
-              const isEditing = editId === s.id
               const batch = batches.find(b => b.id === (s as unknown as { batch_id?: string }).batch_id)
               return (
-                <tr key={s.id} className={`hover:bg-gray-50 ${isEditing ? 'bg-blue-50' : ''}`}>
+                <tr key={s.id} className="hover:bg-gray-50">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold">
@@ -106,41 +92,19 @@ export default function StudentsPage() {
                   </td>
                   <td className="px-5 py-3 text-gray-600">{s.mobile}</td>
                   <td className="px-5 py-3 text-gray-600">{s.school_name}</td>
+                  <td className="px-5 py-3 text-gray-600">{s.grade ?? '-'}</td>
                   <td className="px-5 py-3">
-                    {isEditing ? (
-                      <select
-                        className="px-2 py-1 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={editForm.grade}
-                        onChange={e => setEditForm(f => ({ ...f, grade: e.target.value }))}
-                      >
-                        {gradeOptions.map(g => <option key={g}>{g}</option>)}
-                      </select>
+                    {batch ? (
+                      <div>
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                          {batch.name}
+                        </span>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {batch.days.map((d: number) => DAY_NAMES[d]).join(', ')}
+                        </p>
+                      </div>
                     ) : (
-                      <span className="text-gray-700">{s.grade ?? '-'}</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3">
-                    {isEditing ? (
-                      <select
-                        className="px-2 py-1 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={editForm.batch_id}
-                        onChange={e => setEditForm(f => ({ ...f, batch_id: e.target.value }))}
-                      >
-                        <option value="">No batch</option>
-                        {batches.map(b => (
-                          <option key={b.id} value={b.id}>
-                            {b.name} ({b.days.map((d: number) => DAY_NAMES[d]).join(',')})
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-gray-700">
-                        {batch ? (
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                            {batch.name}
-                          </span>
-                        ) : '-'}
-                      </span>
+                      <span className="text-gray-400">-</span>
                     )}
                   </td>
                   <td className="px-5 py-3">
@@ -150,25 +114,18 @@ export default function StudentsPage() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
-                      {isEditing ? (
-                        <>
-                          <button onClick={() => saveEdit(s.id)} disabled={saving} className="p-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200">
-                            <Check size={14} />
-                          </button>
-                          <button onClick={() => setEditId(null)} className="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
-                            <X size={14} />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => startEdit(s)} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">
-                            <Pencil size={14} />
-                          </button>
-                          <button onClick={() => deleteStudent(s.id)} className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
-                            <Trash2 size={14} />
-                          </button>
-                        </>
-                      )}
+                      <button
+                        onClick={() => router.push(`/teacher/students/${s.id}/edit`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+                      >
+                        <Pencil size={12} /> Edit
+                      </button>
+                      <button
+                        onClick={() => deleteStudent(s.id, s.name)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-50 text-red-500 rounded-lg hover:bg-red-100"
+                      >
+                        <Trash2 size={12} /> Delete
+                      </button>
                     </div>
                   </td>
                 </tr>
