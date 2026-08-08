@@ -8,10 +8,11 @@ const sb = createClient(
 )
 
 export async function GET() {
-  const { data } = await sb.from('students')
-    .select('id,reg_number,name,mobile,parent_name,school_name,grade,mode,monthly_fee,payment_cycle,due_day,join_date,is_active,batch_id,school_id')
+  const { data, error } = await sb.from('students')
+    .select('*')
     .eq('is_active', true)
     .order('name')
+  if (error) return NextResponse.json({ detail: error.message }, { status: 500 })
   return NextResponse.json(data ?? [])
 }
 
