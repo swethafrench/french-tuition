@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import {
@@ -42,13 +43,13 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <aside className="w-56 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
-        <div className="px-4 py-5 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🇫🇷</span>
+      <aside className="w-56 flex-shrink-0 bg-[#0f2044] flex flex-col">
+        <div className="px-4 py-4 border-b border-blue-900">
+          <div className="flex items-center gap-3">
+            <Image src="/apprenons.png" alt="Apprenons" width={40} height={40} className="rounded-lg" />
             <div>
-              <p className="text-sm font-semibold text-gray-900">FrenchTuition</p>
-              <p className="text-xs text-gray-500">Teacher portal</p>
+              <p className="text-sm font-semibold text-white">Apprenons</p>
+              <p className="text-xs text-blue-300">Teacher portal</p>
             </div>
           </div>
         </div>
@@ -56,15 +57,19 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           {navItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href
             return (
-              <Link key={href} href={href} className={`flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors ${active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100'}`}>
+              <Link key={href} href={href} className={`flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors ${
+                active
+                  ? 'bg-white text-[#0f2044] font-medium'
+                  : 'text-blue-200 hover:bg-blue-900 hover:text-white'
+              }`}>
                 <Icon size={16} />
                 {label}
               </Link>
             )
           })}
         </nav>
-        <div className="px-4 py-4 border-t border-gray-200">
-          <button onClick={handleLogout} className="flex items-center gap-2 text-xs text-gray-500 hover:text-red-600 transition-colors">
+        <div className="px-4 py-4 border-t border-blue-900">
+          <button onClick={handleLogout} className="flex items-center gap-2 text-xs text-blue-300 hover:text-white transition-colors">
             <LogOut size={14} />
             Sign out
           </button>

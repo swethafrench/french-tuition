@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
+import Image from 'next/image'
 import { CalendarDays, CalendarOff, CreditCard, User } from 'lucide-react'
 
 const navItems = [
@@ -28,6 +29,13 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
       <div className="w-full max-w-md bg-white flex flex-col min-h-screen shadow-sm">
+        <header className="bg-[#0f2044] px-4 py-3 flex items-center gap-3">
+          <Image src="/apprenons.png" alt="Apprenons" width={36} height={36} className="rounded-lg" />
+          <div>
+            <p className="text-sm font-semibold text-white">Apprenons</p>
+            <p className="text-xs text-blue-300">French Tuition</p>
+          </div>
+        </header>
         <main className="flex-1 overflow-auto pb-20">
           {children}
         </main>
@@ -35,7 +43,9 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
           {navItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href
             return (
-              <a key={href} href={href} className={`flex-1 flex flex-col items-center py-3 gap-0.5 text-xs transition-colors ${active ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}>
+              <a key={href} href={href} className={`flex-1 flex flex-col items-center py-3 gap-0.5 text-xs transition-colors ${
+                active ? 'text-[#0f2044]' : 'text-gray-400 hover:text-gray-600'
+              }`}>
                 <Icon size={20} />
                 {label}
               </a>

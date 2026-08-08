@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import api from '@/lib/api'
 
 export default function TeacherLoginPage() {
@@ -31,15 +32,14 @@ export default function TeacherLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#0f2044] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="text-5xl mb-4">🇫🇷</div>
-          <h1 className="text-2xl font-semibold text-gray-900">Teacher login</h1>
-          <p className="text-sm text-gray-500 mt-2">FrenchTuition management portal</p>
+        <div className="flex flex-col items-center mb-8">
+          <Image src="/apprenons.png" alt="Apprenons Logo" width={180} height={180} className="rounded-2xl mb-4" />
+          <p className="text-blue-200 text-sm">Teacher portal</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        <div className="bg-white rounded-2xl p-6 shadow-xl">
           {error && (
             <div className="mb-4 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
           )}
@@ -67,7 +67,7 @@ export default function TeacherLoginPage() {
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="w-full py-3 text-sm font-medium text-white bg-[#0f2044] rounded-lg hover:bg-blue-900 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
