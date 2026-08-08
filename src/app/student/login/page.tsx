@@ -20,7 +20,7 @@ export default function StudentLoginPage() {
     }
     setLoading(true)
     try {
-      const res = await api.post('/api/auth', { mobile, passcode })
+      const res = await api.post('/api/student-auth', { mobile, passcode })
       localStorage.setItem('student_token', res.data.token)
       localStorage.setItem('student', JSON.stringify(res.data.student))
       router.push('/student/calendar')
