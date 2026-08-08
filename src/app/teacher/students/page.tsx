@@ -4,9 +4,26 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pencil, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
-import { Student } from '@/types'
 
-interface Batch { id: string; name: string; days: number[]; start_time: string; end_time: string }
+interface Student {
+  id: string
+  reg_number: string
+  name: string
+  mobile: string
+  school_name: string
+  grade: string
+  mode: string
+  batch_id: string | null
+  school_id: string | null
+}
+
+interface Batch {
+  id: string
+  name: string
+  days: number[]
+  start_time: string
+  end_time: string
+}
 
 const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 
@@ -76,7 +93,7 @@ export default function StudentsPage() {
                 </td>
               </tr>
             ) : students.map(s => {
-              const batch = batches.find(b => b.id === (s as unknown as { batch_id?: string }).batch_id)
+              const batch = batches.find(b => b.id === s.batch_id)
               return (
                 <tr key={s.id} className="hover:bg-gray-50">
                   <td className="px-5 py-3">
@@ -91,7 +108,7 @@ export default function StudentsPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-gray-600">{s.mobile}</td>
-                  <td className="px-5 py-3 text-gray-600">{s.school_name}</td>
+                  <td className="px-5 py-3 text-gray-600">{s.school_name ?? '-'}</td>
                   <td className="px-5 py-3 text-gray-600">{s.grade ?? '-'}</td>
                   <td className="px-5 py-3">
                     {batch ? (
@@ -100,15 +117,17 @@ export default function StudentsPage() {
                           {batch.name}
                         </span>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          {batch.days.map((d: number) => DAY_NAMES[d]).join(', ')}
+                          {batch.days.map((d: number) => DAY_NAMES[d]).join(', ')} · {batch.start_time.slice(0,5)} to {batch.end_time.slice(0,5)}
                         </p>
                       </div>
                     ) : (
-                      <span className="text-gray-400">-</span>
+                      <span className="text-gray-400 text-xs">No batch</span>
                     )}
                   </td>
                   <td className="px-5 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.mode === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      s.mode === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
                       {s.mode}
                     </span>
                   </td>
