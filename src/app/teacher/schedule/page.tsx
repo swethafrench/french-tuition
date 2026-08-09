@@ -76,7 +76,7 @@ export default function SchedulePage() {
   const loadData = useCallback(async () => {
     const [{ data: b }, studentsRes, overrideRes] = await Promise.all([
       supabase.from('batch_student_counts').select('*'),
-      api.get('/api/students'),
+      api.get('/api/students-with-batch'),
       api.get('/api/batch-overrides', { params: { month: monthStr } }),
     ])
     setBatches(b ?? [])
@@ -114,10 +114,6 @@ export default function SchedulePage() {
     const dow = date.getDay() === 0 ? 6 : date.getDay() - 1
     const isRegularDay = batch.days.includes(dow)
 
-    console.log('Opening batch popup:', batch.name, 'students:', s.length)
-    console.log('Students with batch_id:', s.filter(st => st.batch_id).length)
-    console.log('Students in this batch:', s.filter(st => st.batch_id === batch.id).length)
-
     const regularStudents: BatchStudentDetail[] = isRegularDay
       ? s.filter(st => st.batch_id === batch.id).map(st => ({ ...st, is_override: false }))
       : []
@@ -153,7 +149,7 @@ export default function SchedulePage() {
       })
       const [{ data: b }, studentsRes, overrideRes] = await Promise.all([
         supabase.from('batch_student_counts').select('*'),
-        api.get('/api/students'),
+        api.get('/api/students-with-batch'),
         api.get('/api/batch-overrides', { params: { month: monthStr } }),
       ])
       setBatches(b ?? [])
@@ -172,7 +168,7 @@ export default function SchedulePage() {
     await api.delete('/api/batch-overrides', { data: { id: override.id } })
     const [overrideRes, studentsRes] = await Promise.all([
       api.get('/api/batch-overrides', { params: { month: monthStr } }),
-      api.get('/api/students'),
+      api.get('/api/students-with-batch'),
     ])
     setOverrides(overrideRes.data ?? [])
     setStudents(studentsRes.data ?? [])
@@ -296,7 +292,7 @@ export default function SchedulePage() {
                         const c = getBatchColor(b.id)
                         return (
                           <button key={b.id} onClick={() => openBatchPopup(date, b)}
-                            className={`w-full text-left px-1.5 py-0.5 rounded text-xs font-medium truncate ${c.bg} ${c.text} hover:opacity-80 transition-opacity`}>
+                            className={`w-full text-left px-1.5 py-0.5 rounded text-xs font-medium truncate ${c.bg} ${c.text} hover:opacity-80`}>
                             {b.name} · {b.student_count ?? 0}
                           </button>
                         )
