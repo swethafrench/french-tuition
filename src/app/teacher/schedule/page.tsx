@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, X, Plus, Users } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import api from '@/lib/api'
@@ -51,49 +51,44 @@ export default function SchedulePage() {
   const [overrideDate, setOverrideDate] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Keep latest data in refs so click handlers always see fresh data
-  const latestStudents = useRef<Student[]>([])
-  const latestOverrides = useRef<BatchOverride[]>([])
-
   const month = currentDate.getMonth()
   const year = currentDate.getFullYear()
   const monthStr = `${year}-${String(month+1).padStart(2,'0')}`
 
-  const loadData = async (ms?: string) => {
-    const m = ms ?? monthStr
+  const loadData = useCallback(async (ms: string) => {
     const [{ data: b }, sRes, oRes] = await Promise.all([
       supabase.from('batch_student_counts').select('*'),
       api.get('/api/students-with-batch'),
-      api.get('/api/batch-overrides', { params: { month: m } }),
+      api.get('/api/batch-overrides', { params: { month: ms } }),
     ])
-    const s = sRes.data ?? []
-    const o = oRes.data ?? []
+    const s: Student[] = sRes.data ?? []
+    const o: BatchOverride[] = oRes.data ?? []
     setBatches(b ?? [])
     setStudents(s)
     setOverrides(o)
-    latestStudents.current = s
-    latestOverrides.current = o
     setLoading(false)
-    return { s, o }
-  }
+    return { s, o, b: b ?? [] }
+  }, [])
 
-  useEffect(() => { loadData(monthStr) }, [monthStr])
+  useEffect(() => {
+    loadData(monthStr)
+  }, [monthStr, loadData])
 
-  const color = (batchId: string) => {
-    const idx = batches.findIndex(b => b.id === batchId) % BATCH_COLORS.length
+  const color = useCallback((batchId: string, batchList: Batch[]) => {
+    const idx = batchList.findIndex(b => b.id === batchId) % BATCH_COLORS.length
     return BATCH_COLORS[Math.max(idx, 0)]
-  }
+  }, [])
 
-  const batchesForDay = (date: Date) => {
+  const batchesForDay = useCallback((date: Date, batchList: Batch[], overrideList: BatchOverride[]) => {
     const dow = date.getDay() === 0 ? 6 : date.getDay() - 1
     const dateStr = date.toISOString().split('T')[0]
-    const reg = batches.filter(b => b.days.includes(dow))
-    const ovIds = latestOverrides.current.filter(o => o.override_date === dateStr).map(o => o.batch_id)
-    const ov = batches.filter(b => ovIds.includes(b.id) && !reg.find(r => r.id === b.id))
+    const reg = batchList.filter(b => b.days.includes(dow))
+    const ovIds = overrideList.filter(o => o.override_date === dateStr).map(o => o.batch_id)
+    const ov = batchList.filter(b => ovIds.includes(b.id) && !reg.find(r => r.id === b.id))
     return [...reg, ...ov]
-  }
+  }, [])
 
-  const buildBatchStudents = (date: Date, batch: Batch, s: Student[], o: BatchOverride[]) => {
+  const buildPopup = useCallback((date: Date, batch: Batch, s: Student[], o: BatchOverride[]) => {
     const dateStr = date.toISOString().split('T')[0]
     const dow = date.getDay() === 0 ? 6 : date.getDay() - 1
     const isRegDay = batch.days.includes(dow)
@@ -105,13 +100,13 @@ export default function SchedulePage() {
       .map(ov => ({ id: ov.student_id, name: ov.students.name, reg_number: ov.students.reg_number, mode: '', is_override: true }))
     const ids = new Set(regular.map(st => st.id))
     const combined = [...regular, ...overrideSts.filter(st => !ids.has(st.id))]
-    return { combined, available: s.filter(st => !combined.find(bs => bs.id === st.id)) }
-  }
+    const available = s.filter(st => !combined.find(bs => bs.id === st.id))
+    return { combined, available }
+  }, [])
 
-  const openPopup = (date: Date, batch: Batch) => {
-    const s = latestStudents.current
-    const o = latestOverrides.current
-    const { combined, available } = buildBatchStudents(date, batch, s, o)
+  // Open popup — uses current state values passed directly
+  const openPopup = useCallback((date: Date, batch: Batch, s: Student[], o: BatchOverride[]) => {
+    const { combined, available } = buildPopup(date, batch, s, o)
     setSelectedDay(date)
     setSelectedBatch(batch)
     setBatchStudents(combined)
@@ -120,7 +115,7 @@ export default function SchedulePage() {
     setShowAddOverride(false)
     setOverrideStudentId('')
     setOverrideNote('')
-  }
+  }, [buildPopup])
 
   const handleAddOverride = async () => {
     if (!overrideStudentId || !selectedBatch || !selectedDay) return
@@ -131,7 +126,7 @@ export default function SchedulePage() {
         override_date: overrideDate, note: overrideNote,
       })
       const { s, o } = await loadData(monthStr)
-      const { combined, available } = buildBatchStudents(selectedDay, selectedBatch, s, o)
+      const { combined, available } = buildPopup(selectedDay, selectedBatch, s, o)
       setBatchStudents(combined)
       setAvailableForOverride(available)
       setShowAddOverride(false)
@@ -140,11 +135,11 @@ export default function SchedulePage() {
   }
 
   const handleRemoveOverride = async (studentId: string) => {
-    const ov = latestOverrides.current.find(o => o.student_id === studentId && o.override_date === overrideDate)
+    const ov = overrides.find(o => o.student_id === studentId && o.override_date === overrideDate)
     if (!ov || !selectedDay || !selectedBatch) return
     await api.delete('/api/batch-overrides', { data: { id: ov.id } })
     const { s, o } = await loadData(monthStr)
-    const { combined, available } = buildBatchStudents(selectedDay, selectedBatch, s, o)
+    const { combined, available } = buildPopup(selectedDay, selectedBatch, s, o)
     setBatchStudents(combined)
     setAvailableForOverride(available)
   }
@@ -162,7 +157,8 @@ export default function SchedulePage() {
   const cells: (number|null)[] = Array(startOff).fill(null)
   for (let d=1;d<=daysInMonth;d++) cells.push(d)
   while (cells.length%7!==0) cells.push(null)
-  const weeks=[]; for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7))
+  const weeks: (number|null)[][] = []
+  for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7))
 
   const weekDates = () => {
     const d = new Date(currentDate)
@@ -172,6 +168,7 @@ export default function SchedulePage() {
   }
 
   const todayStr = new Date().toISOString().split('T')[0]
+
   const navLabel = () => {
     if(view==='month') return `${MONTH_NAMES[month]} ${year}`
     if(view==='week'){const wk=weekDates();return `${wk[0].getDate()} ${MONTH_NAMES[wk[0].getMonth()]} - ${wk[6].getDate()} ${MONTH_NAMES[wk[6].getMonth()]} ${year}`}
@@ -211,6 +208,7 @@ export default function SchedulePage() {
         <button onClick={()=>{setCurrentDate(new Date());setSelectedBatch(null)}} className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Today</button>
       </div>
 
+      {/* MONTH VIEW */}
       {view==='month' && (
         <div className="bg-white rounded-xl border border-gray-200">
           <div className="grid grid-cols-7 border-b border-gray-100">
@@ -222,13 +220,13 @@ export default function SchedulePage() {
                 if(!day) return <div key={di} className="min-h-24 border-r border-gray-100 last:border-0 bg-gray-50/50"/>
                 const date=new Date(year,month,day)
                 const isToday=date.toISOString().split('T')[0]===todayStr
-                const db=batchesForDay(date)
+                const db=batchesForDay(date, batches, overrides)
                 return(
                   <div key={di} className={`min-h-24 border-r border-gray-100 last:border-0 p-1.5 ${isToday?'bg-blue-50/50':'hover:bg-gray-50'}`}>
                     <div className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${isToday?'bg-[#0f2044] text-white':'text-gray-700'}`}>{day}</div>
                     <div className="flex flex-col gap-0.5">
-                      {db.map(b=>{const c=color(b.id);return(
-                        <button key={b.id} onClick={()=>openPopup(date,b)}
+                      {db.map(b=>{const c=color(b.id, batches);return(
+                        <button key={b.id} onClick={()=>openPopup(date, b, students, overrides)}
                           className={`w-full text-left px-1.5 py-0.5 rounded text-xs font-medium truncate ${c.bg} ${c.text} hover:opacity-80`}>
                           {b.name} · {b.student_count??0}
                         </button>
@@ -242,6 +240,7 @@ export default function SchedulePage() {
         </div>
       )}
 
+      {/* WEEK VIEW */}
       {view==='week' && (
         <div className="bg-white rounded-xl border border-gray-200">
           <div className="grid grid-cols-7 border-b border-gray-100">
@@ -255,11 +254,12 @@ export default function SchedulePage() {
           <div className="grid grid-cols-7 min-h-48">
             {weekDates().map((date,i)=>{
               const isToday=date.toISOString().split('T')[0]===todayStr
-              const db=batchesForDay(date)
+              const db=batchesForDay(date, batches, overrides)
               return(
                 <div key={i} className={`border-r border-gray-100 last:border-0 p-2 ${isToday?'bg-blue-50/30':''}`}>
-                  {db.map(b=>{const c=color(b.id);return(
-                    <button key={b.id} onClick={()=>openPopup(date,b)} className={`w-full text-left p-2 rounded-lg mb-1.5 ${c.bg} ${c.text} hover:opacity-80`}>
+                  {db.map(b=>{const c=color(b.id, batches);return(
+                    <button key={b.id} onClick={()=>openPopup(date, b, students, overrides)}
+                      className={`w-full text-left p-2 rounded-lg mb-1.5 ${c.bg} ${c.text} hover:opacity-80`}>
                       <p className="text-xs font-semibold">{b.name}</p>
                       <p className="text-xs opacity-75">{b.start_time.slice(0,5)} - {b.end_time.slice(0,5)}</p>
                       <p className="text-xs opacity-75 flex items-center gap-1"><Users size={10}/>{b.student_count??0}</p>
@@ -273,37 +273,39 @@ export default function SchedulePage() {
         </div>
       )}
 
+      {/* DAY VIEW */}
       {view==='day' && (
         <div className="bg-white rounded-xl border border-gray-200">
           <div className={`px-5 py-4 border-b border-gray-100 ${currentDate.toISOString().split('T')[0]===todayStr?'bg-blue-50':''}`}>
             <h3 className="font-semibold text-gray-900">{FULL_DAY_NAMES[currentDate.getDay()===0?6:currentDate.getDay()-1]}, {currentDate.getDate()} {MONTH_NAMES[month]} {year}</h3>
           </div>
           <div className="p-4">
-            {batchesForDay(currentDate).length===0?(
-              <p className="text-gray-400 text-sm text-center py-8">No classes scheduled for this day.</p>
-            ):(
-              <div className="flex flex-col gap-3">
-                {batchesForDay(currentDate).map(b=>{const c=color(b.id);return(
-                  <button key={b.id} onClick={()=>openPopup(currentDate,b)} className={`w-full text-left p-4 rounded-xl border ${c.bg} ${c.text} ${c.border} hover:opacity-90`}>
-                    <div className="flex items-center justify-between">
-                      <div><p className="font-semibold text-base">{b.name}</p><p className="text-sm opacity-80 mt-0.5">{b.start_time.slice(0,5)} - {b.end_time.slice(0,5)}</p></div>
-                      <div className="flex items-center gap-1.5 text-sm font-medium"><Users size={16}/>{b.student_count??0} students</div>
-                    </div>
-                  </button>
-                )})}
-              </div>
-            )}
+            {batchesForDay(currentDate, batches, overrides).length===0
+              ? <p className="text-gray-400 text-sm text-center py-8">No classes scheduled.</p>
+              : <div className="flex flex-col gap-3">
+                  {batchesForDay(currentDate, batches, overrides).map(b=>{const c=color(b.id, batches);return(
+                    <button key={b.id} onClick={()=>openPopup(currentDate, b, students, overrides)}
+                      className={`w-full text-left p-4 rounded-xl border ${c.bg} ${c.text} ${c.border} hover:opacity-90`}>
+                      <div className="flex items-center justify-between">
+                        <div><p className="font-semibold text-base">{b.name}</p><p className="text-sm opacity-80 mt-0.5">{b.start_time.slice(0,5)} - {b.end_time.slice(0,5)}</p></div>
+                        <div className="flex items-center gap-1.5 text-sm font-medium"><Users size={16}/>{b.student_count??0} students</div>
+                      </div>
+                    </button>
+                  )})}
+                </div>
+            }
           </div>
         </div>
       )}
 
+      {/* SIDE PANEL */}
       {selectedBatch&&selectedDay&&(
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-end" onClick={()=>setSelectedBatch(null)}>
           <div className="bg-white h-full w-96 shadow-2xl flex flex-col" onClick={e=>e.stopPropagation()}>
-            <div className={`px-5 py-4 border-b border-gray-100 ${color(selectedBatch.id).bg}`}>
+            <div className={`px-5 py-4 border-b border-gray-100 ${color(selectedBatch.id, batches).bg}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className={`font-semibold text-lg ${color(selectedBatch.id).text}`}>{selectedBatch.name}</h3>
+                  <h3 className={`font-semibold text-lg ${color(selectedBatch.id, batches).text}`}>{selectedBatch.name}</h3>
                   <p className="text-sm text-gray-600 mt-0.5">{selectedDay.getDate()} {MONTH_NAMES[selectedDay.getMonth()]} {selectedDay.getFullYear()}</p>
                 </div>
                 <button onClick={()=>setSelectedBatch(null)} className="p-1.5 rounded-lg hover:bg-white/50"><X size={18}/></button>
@@ -320,31 +322,29 @@ export default function SchedulePage() {
                   <Plus size={12}/> Add for today
                 </button>
               </div>
-              {batchStudents.length===0?(
-                <p className="text-sm text-gray-400 text-center py-6">No students in this batch yet.</p>
-              ):(
-                <div className="flex flex-col gap-2">
-                  {batchStudents.map(s=>(
-                    <div key={s.id} className={`flex items-center gap-3 p-3 rounded-lg border ${s.is_override?'border-amber-200 bg-amber-50':'border-gray-100 bg-gray-50'}`}>
-                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                        {s.name.split(' ').map((n:string)=>n[0]).join('').slice(0,2)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
-                        <p className="text-xs text-gray-400">{s.reg_number}</p>
-                      </div>
-                      {s.is_override?(
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">One-time</span>
-                          <button onClick={()=>handleRemoveOverride(s.id)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+              {batchStudents.length===0
+                ? <p className="text-sm text-gray-400 text-center py-6">No students in this batch yet.</p>
+                : <div className="flex flex-col gap-2">
+                    {batchStudents.map(s=>(
+                      <div key={s.id} className={`flex items-center gap-3 p-3 rounded-lg border ${s.is_override?'border-amber-200 bg-amber-50':'border-gray-100 bg-gray-50'}`}>
+                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                          {s.name.split(' ').map((n:string)=>n[0]).join('').slice(0,2)}
                         </div>
-                      ):(
-                        <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">Regular</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
+                          <p className="text-xs text-gray-400">{s.reg_number}</p>
+                        </div>
+                        {s.is_override
+                          ? <div className="flex items-center gap-2">
+                              <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">One-time</span>
+                              <button onClick={()=>handleRemoveOverride(s.id)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+                            </div>
+                          : <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">Regular</span>
+                        }
+                      </div>
+                    ))}
+                  </div>
+              }
               {showAddOverride&&(
                 <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <p className="text-xs font-semibold text-gray-700 mb-1">Add student for this day only</p>
@@ -355,9 +355,7 @@ export default function SchedulePage() {
                       <select className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                         value={overrideStudentId} onChange={e=>setOverrideStudentId(e.target.value)}>
                         <option value="">Choose a student</option>
-                        {availableForOverride.map(s=>(
-                          <option key={s.id} value={s.id}>{s.name} ({s.reg_number})</option>
-                        ))}
+                        {availableForOverride.map(s=><option key={s.id} value={s.id}>{s.name} ({s.reg_number})</option>)}
                       </select>
                     </div>
                     <div>
