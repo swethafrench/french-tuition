@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import api from '@/lib/api'
 
 interface Batch {
-  id: string; name: string; days: number[]
+  batch_id: string; id?: string; name: string; days: number[]
   start_time: string; end_time: string; student_count?: number
 }
 interface Student {
@@ -55,6 +55,7 @@ export default function SchedulePage() {
   const [overrideDate, setOverrideDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [popupLoading, setPopupLoading] = useState(false)
+  
 
   const month = currentDate.getMonth()
   const year = currentDate.getFullYear()
@@ -87,10 +88,13 @@ export default function SchedulePage() {
     setOverrideNote('')
     setOverrideDate(dateStr)
     setPopupLoading(true)
+    setDebugMsg('Fetching...')
 
     try {
       const dow = clickedDate.getDay() === 0 ? 6 : clickedDate.getDay() - 1
       const isRegDay = batch.days.includes(dow)
+
+      setDebugMsg(`date=${dateStr} dow=${dow} isRegDay=${isRegDay} batchDays=${JSON.stringify(batch.days)}`)
 
       const [sRes, oRes] = await Promise.all([
         api.get('/api/students-with-batch'),
@@ -99,6 +103,9 @@ export default function SchedulePage() {
 
       const s: Student[] = sRes.data ?? []
       const o: BatchOverride[] = oRes.data ?? []
+
+      const inBatch = s.filter(st => st.batch_id === batch.id)
+      setDebugMsg(`students=${s.length} inBatch=${inBatch.length} batchId=${batch.id} firstStudentBatchId=${s[0]?.batch_id}`)
 
       const regular: BatchStudentDetail[] = isRegDay
         ? s.filter(st => st.batch_id === batch.id).map(st => ({ ...st, is_override: false }))
@@ -120,6 +127,8 @@ export default function SchedulePage() {
 
       setBatchStudents(combined)
       setAvailableForOverride(available)
+    } catch(err) {
+      setDebugMsg('Error: ' + String(err))
     } finally {
       setPopupLoading(false)
     }
@@ -364,6 +373,14 @@ export default function SchedulePage() {
                 <span>👥 {batchStudents.length} students</span>
               </div>
             </div>
+
+            {/* DEBUG MESSAGE */}
+            {debugMsg && (
+              <div className="px-4 py-2 bg-yellow-50 border-b border-yellow-200">
+                <p className="text-xs text-yellow-800 font-mono break-all">{debugMsg}</p>
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Students</p>
