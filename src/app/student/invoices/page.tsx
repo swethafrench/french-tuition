@@ -102,7 +102,10 @@ export default function StudentInvoicesPage() {
         {invoices.map(inv => {
           const isOpen = openId === inv.id
           const upiNote = encodeURIComponent(`Invoice ${inv.month}`)
-          const baseUpi = `upi://pay?pa=${upiId}&pn=${upiName}&am=${inv.amount}&cu=INR&tn=${upiNote}`
+          const upiParams = `pa=${upiId}&pn=${upiName}&am=${inv.amount}&cu=INR&tn=${upiNote}`
+          const gPayLink    = `tez://upi/pay?${upiParams}`
+          const phonePeLink = `phonepe://pay?${upiParams}`
+          const anyUpiLink  = `upi://pay?${upiParams}`
 
           return (
             <div key={inv.id} className={`bg-white rounded-2xl border overflow-hidden transition-all ${
@@ -185,15 +188,15 @@ export default function StudentInvoicesPage() {
                   {(inv.status === 'sent' || inv.status === 'overdue') && (
                     <div className="space-y-2">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pay now</p>
-                      <a href={baseUpi}
+                      <a href={gPayLink}
                         className="flex items-center justify-center gap-2 w-full py-3 bg-[#1a73e8] text-white text-sm font-medium rounded-xl hover:bg-[#1557b0] transition-colors">
                         <span className="font-bold">G</span> Pay with Google Pay
                       </a>
-                      <a href={baseUpi}
+                      <a href={phonePeLink}
                         className="flex items-center justify-center gap-2 w-full py-3 bg-[#5f259f] text-white text-sm font-medium rounded-xl hover:bg-[#4a1a7c] transition-colors">
                         📱 Pay with PhonePe
                       </a>
-                      <a href={baseUpi}
+                      <a href={anyUpiLink}
                         className="flex items-center justify-center gap-2 w-full py-3 border border-gray-300 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">
                         ↗ Any UPI app
                       </a>
