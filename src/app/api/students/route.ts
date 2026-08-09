@@ -8,20 +8,22 @@ const sb = createClient(
 )
 
 export const dynamic = 'force-dynamic'
-export const revalidate = 0
 
 export async function GET() {
-  const { data, error } = await sb
-    .from('students')
-    .select('*')
-    .eq('is_active', true)
-    .order('name')
+  const { data, error } = await sb.rpc('get_all_students')
+  
+  if (error) {
+    // fallback to direct query
+    const { data: d2, error: e2 } = await sb
+      .from('students')
+      .select('id, reg_number, name, mobile, parent_name, school_name, school_id, grade, mode, monthly_fee, payment_cycle, due_day, join_date, is_active, batch_id, created_at, updated_at')
+      .eq('is_active', true)
+      .order('name')
+    if (e2) return NextResponse.json({ detail: e2.message }, { status: 500 })
+    return NextResponse.json(d2 ?? [])
+  }
 
-  if (error) return NextResponse.json({ detail: error.message }, { status: 500 })
-
-  const response = NextResponse.json(data ?? [])
-  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
-  return response
+  return NextResponse.json(data ?? [])
 }
 
 export async function POST(req: NextRequest) {

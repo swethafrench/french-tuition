@@ -74,13 +74,13 @@ export default function SchedulePage() {
   const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
 
   const loadData = useCallback(async () => {
-    const [{ data: b }, { data: s }, overrideRes] = await Promise.all([
+    const [{ data: b }, studentsRes, overrideRes] = await Promise.all([
       supabase.from('batch_student_counts').select('*'),
-      supabase.from('students').select('id,name,reg_number,batch_id,mode').eq('is_active', true),
+      api.get('/api/students'),
       api.get('/api/batch-overrides', { params: { month: monthStr } }),
     ])
     setBatches(b ?? [])
-    setStudents(s ?? [])
+    setStudents(studentsRes.data ?? [])
     setOverrides(overrideRes.data ?? [])
     setLoading(false)
   }, [monthStr])
@@ -113,6 +113,10 @@ export default function SchedulePage() {
     const dateStr = date.toISOString().split('T')[0]
     const dow = date.getDay() === 0 ? 6 : date.getDay() - 1
     const isRegularDay = batch.days.includes(dow)
+
+    console.log('Opening batch popup:', batch.name, 'students:', s.length)
+    console.log('Students with batch_id:', s.filter(st => st.batch_id).length)
+    console.log('Students in this batch:', s.filter(st => st.batch_id === batch.id).length)
 
     const regularStudents: BatchStudentDetail[] = isRegularDay
       ? s.filter(st => st.batch_id === batch.id).map(st => ({ ...st, is_override: false }))
@@ -147,16 +151,15 @@ export default function SchedulePage() {
         override_date: overrideDate,
         note: overrideNote,
       })
-      // Reload data
-      const [{ data: b }, { data: s }, overrideRes] = await Promise.all([
+      const [{ data: b }, studentsRes, overrideRes] = await Promise.all([
         supabase.from('batch_student_counts').select('*'),
-        supabase.from('students').select('id,name,reg_number,batch_id,mode').eq('is_active', true),
+        api.get('/api/students'),
         api.get('/api/batch-overrides', { params: { month: monthStr } }),
       ])
       setBatches(b ?? [])
-      setStudents(s ?? [])
+      setStudents(studentsRes.data ?? [])
       setOverrides(overrideRes.data ?? [])
-      openBatchPopup(selectedDay!, selectedBatch, s ?? [], overrideRes.data ?? [])
+      openBatchPopup(selectedDay!, selectedBatch, studentsRes.data ?? [], overrideRes.data ?? [])
       setShowAddOverride(false)
     } finally {
       setSaving(false)
@@ -167,9 +170,13 @@ export default function SchedulePage() {
     const override = overrides.find(o => o.student_id === studentId && o.override_date === overrideDate)
     if (!override) return
     await api.delete('/api/batch-overrides', { data: { id: override.id } })
-    const overrideRes = await api.get('/api/batch-overrides', { params: { month: monthStr } })
+    const [overrideRes, studentsRes] = await Promise.all([
+      api.get('/api/batch-overrides', { params: { month: monthStr } }),
+      api.get('/api/students'),
+    ])
     setOverrides(overrideRes.data ?? [])
-    openBatchPopup(selectedDay!, selectedBatch!, students, overrideRes.data ?? [])
+    setStudents(studentsRes.data ?? [])
+    openBatchPopup(selectedDay!, selectedBatch!, studentsRes.data ?? [], overrideRes.data ?? [])
   }
 
   const navigate = (dir: number) => {
@@ -209,7 +216,6 @@ export default function SchedulePage() {
     return `${currentDate.getDate()} ${MONTH_NAMES[month]} ${year}`
   }
 
-  // Students not already in the selected batch popup
   const availableStudentsForOverride = students.filter(s =>
     !batchStudents.find(bs => bs.id === s.id)
   )
@@ -328,7 +334,7 @@ export default function SchedulePage() {
                     const c = getBatchColor(b.id)
                     return (
                       <button key={b.id} onClick={() => openBatchPopup(date, b)}
-                        className={`w-full text-left p-2 rounded-lg mb-1.5 ${c.bg} ${c.text} hover:opacity-80 transition-opacity`}>
+                        className={`w-full text-left p-2 rounded-lg mb-1.5 ${c.bg} ${c.text} hover:opacity-80`}>
                         <p className="text-xs font-semibold">{b.name}</p>
                         <p className="text-xs opacity-75">{b.start_time.slice(0,5)} - {b.end_time.slice(0,5)}</p>
                         <p className="text-xs opacity-75 flex items-center gap-1"><Users size={10} />{b.student_count ?? 0}</p>
@@ -438,13 +444,10 @@ export default function SchedulePage() {
                 </div>
               )}
 
-              {/* Add override form — student only, no batch selector */}
               {showAddOverride && (
                 <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <p className="text-xs font-semibold text-gray-700 mb-1">Add student for this day only</p>
-                  <p className="text-xs text-gray-400 mb-3">
-                    {selectedBatch.name} · {overrideDate}
-                  </p>
+                  <p className="text-xs text-gray-400 mb-3">{selectedBatch.name} · {overrideDate}</p>
                   <div className="flex flex-col gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Select student</label>
