@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { ChevronLeft, ChevronRight, X, Plus, Users } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import api from '@/lib/api'
@@ -56,9 +56,12 @@ export default function SchedulePage() {
   const [view, setView] = useState<'month' | 'week' | 'day'>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [batches, setBatches] = useState<Batch[]>([])
-  const [students, setStudents] = useState<Student[]>([])
-  const [overrides, setOverrides] = useState<BatchOverride[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Use refs to always have latest data in event handlers
+  const studentsRef = useRef<Student[]>([])
+  const overridesRef = useRef<BatchOverride[]>([])
+  const monthStrRef = useRef('')
 
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null)
@@ -68,48 +71,51 @@ export default function SchedulePage() {
   const [overrideNote, setOverrideNote] = useState('')
   const [overrideDate, setOverrideDate] = useState('')
   const [saving, setSaving] = useState(false)
+  const [availableForOverride, setAvailableForOverride] = useState<Student[]>([])
 
   const month = currentDate.getMonth()
   const year = currentDate.getFullYear()
   const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
 
-  const loadData = useCallback(async () => {
+  useEffect(() => {
+    monthStrRef.current = monthStr
+    loadData()
+  }, [monthStr])
+
+  const loadData = async () => {
+    const ms = monthStrRef.current
     const [{ data: b }, studentsRes, overrideRes] = await Promise.all([
       supabase.from('batch_student_counts').select('*'),
       api.get('/api/students-with-batch'),
-      api.get('/api/batch-overrides', { params: { month: monthStr } }),
+      api.get('/api/batch-overrides', { params: { month: ms } }),
     ])
     setBatches(b ?? [])
-    setStudents(studentsRes.data ?? [])
-    setOverrides(overrideRes.data ?? [])
+    studentsRef.current = studentsRes.data ?? []
+    overridesRef.current = overrideRes.data ?? []
     setLoading(false)
-  }, [monthStr])
+  }
 
-  useEffect(() => { loadData() }, [loadData])
-
-  const getBatchColor = (batchId: string) => {
-    const idx = batches.findIndex(b => b.id === batchId) % BATCH_COLORS.length
+  const getBatchColor = (batchId: string, batchList: Batch[]) => {
+    const idx = batchList.findIndex(b => b.id === batchId) % BATCH_COLORS.length
     return BATCH_COLORS[idx >= 0 ? idx : 0]
   }
 
-  const getBatchesForDay = (date: Date) => {
+  const getBatchesForDay = (date: Date, batchList: Batch[]) => {
     const dow = date.getDay() === 0 ? 6 : date.getDay() - 1
     const dateStr = date.toISOString().split('T')[0]
-    const regularBatches = batches.filter(b => b.days.includes(dow))
-    const overrideBatchIds = overrides
+    const regularBatches = batchList.filter(b => b.days.includes(dow))
+    const overrideBatchIds = overridesRef.current
       .filter(o => o.override_date === dateStr)
       .map(o => o.batch_id)
-    const overrideBatches = batches.filter(b =>
+    const overrideBatches = batchList.filter(b =>
       overrideBatchIds.includes(b.id) && !regularBatches.find(rb => rb.id === b.id)
     )
     return [...regularBatches, ...overrideBatches]
   }
 
-  const openBatchPopup = useCallback((date: Date, batch: Batch, allStudents?: Student[], allOverrides?: BatchOverride[]) => {
-    const s = allStudents ?? students
-    const o = allOverrides ?? overrides
-    setSelectedDay(date)
-    setSelectedBatch(batch)
+  const openBatchPopup = (date: Date, batch: Batch) => {
+    const s = studentsRef.current
+    const o = overridesRef.current
     const dateStr = date.toISOString().split('T')[0]
     const dow = date.getDay() === 0 ? 6 : date.getDay() - 1
     const isRegularDay = batch.days.includes(dow)
@@ -130,12 +136,17 @@ export default function SchedulePage() {
 
     const allIds = new Set(regularStudents.map(st => st.id))
     const uniqueOverrides = overrideStudents.filter(st => !allIds.has(st.id))
-    setBatchStudents([...regularStudents, ...uniqueOverrides])
+    const combined = [...regularStudents, ...uniqueOverrides]
+
+    setSelectedDay(date)
+    setSelectedBatch(batch)
+    setBatchStudents(combined)
+    setAvailableForOverride(s.filter(st => !combined.find(bs => bs.id === st.id)))
     setOverrideDate(dateStr)
     setShowAddOverride(false)
     setOverrideStudentId('')
     setOverrideNote('')
-  }, [students, overrides])
+  }
 
   const handleAddOverride = async () => {
     if (!overrideStudentId || !selectedBatch) return
@@ -147,15 +158,8 @@ export default function SchedulePage() {
         override_date: overrideDate,
         note: overrideNote,
       })
-      const [{ data: b }, studentsRes, overrideRes] = await Promise.all([
-        supabase.from('batch_student_counts').select('*'),
-        api.get('/api/students-with-batch'),
-        api.get('/api/batch-overrides', { params: { month: monthStr } }),
-      ])
-      setBatches(b ?? [])
-      setStudents(studentsRes.data ?? [])
-      setOverrides(overrideRes.data ?? [])
-      openBatchPopup(selectedDay!, selectedBatch, studentsRes.data ?? [], overrideRes.data ?? [])
+      await loadData()
+      openBatchPopup(selectedDay!, selectedBatch)
       setShowAddOverride(false)
     } finally {
       setSaving(false)
@@ -163,16 +167,11 @@ export default function SchedulePage() {
   }
 
   const handleRemoveOverride = async (studentId: string) => {
-    const override = overrides.find(o => o.student_id === studentId && o.override_date === overrideDate)
+    const override = overridesRef.current.find(o => o.student_id === studentId && o.override_date === overrideDate)
     if (!override) return
     await api.delete('/api/batch-overrides', { data: { id: override.id } })
-    const [overrideRes, studentsRes] = await Promise.all([
-      api.get('/api/batch-overrides', { params: { month: monthStr } }),
-      api.get('/api/students-with-batch'),
-    ])
-    setOverrides(overrideRes.data ?? [])
-    setStudents(studentsRes.data ?? [])
-    openBatchPopup(selectedDay!, selectedBatch!, studentsRes.data ?? [], overrideRes.data ?? [])
+    await loadData()
+    openBatchPopup(selectedDay!, selectedBatch!)
   }
 
   const navigate = (dir: number) => {
@@ -211,10 +210,6 @@ export default function SchedulePage() {
     }
     return `${currentDate.getDate()} ${MONTH_NAMES[month]} ${year}`
   }
-
-  const availableStudentsForOverride = students.filter(s =>
-    !batchStudents.find(bs => bs.id === s.id)
-  )
 
   if (loading) return (
     <div className="flex items-center justify-center h-full">
@@ -281,7 +276,7 @@ export default function SchedulePage() {
                 const date = new Date(year, month, day)
                 const dateStr = date.toISOString().split('T')[0]
                 const isToday = dateStr === todayStr
-                const dayBatches = getBatchesForDay(date)
+                const dayBatches = getBatchesForDay(date, batches)
                 return (
                   <div key={di} className={`min-h-24 border-r border-gray-100 last:border-0 p-1.5 ${isToday ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
                     <div className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-[#0f2044] text-white' : 'text-gray-700'}`}>
@@ -289,7 +284,7 @@ export default function SchedulePage() {
                     </div>
                     <div className="flex flex-col gap-0.5">
                       {dayBatches.map(b => {
-                        const c = getBatchColor(b.id)
+                        const c = getBatchColor(b.id, batches)
                         return (
                           <button key={b.id} onClick={() => openBatchPopup(date, b)}
                             className={`w-full text-left px-1.5 py-0.5 rounded text-xs font-medium truncate ${c.bg} ${c.text} hover:opacity-80`}>
@@ -323,11 +318,11 @@ export default function SchedulePage() {
           <div className="grid grid-cols-7 min-h-48">
             {getWeekDates().map((date, i) => {
               const isToday = date.toISOString().split('T')[0] === todayStr
-              const dayBatches = getBatchesForDay(date)
+              const dayBatches = getBatchesForDay(date, batches)
               return (
                 <div key={i} className={`border-r border-gray-100 last:border-0 p-2 ${isToday ? 'bg-blue-50/30' : ''}`}>
                   {dayBatches.map(b => {
-                    const c = getBatchColor(b.id)
+                    const c = getBatchColor(b.id, batches)
                     return (
                       <button key={b.id} onClick={() => openBatchPopup(date, b)}
                         className={`w-full text-left p-2 rounded-lg mb-1.5 ${c.bg} ${c.text} hover:opacity-80`}>
@@ -354,12 +349,12 @@ export default function SchedulePage() {
             </h3>
           </div>
           <div className="p-4">
-            {getBatchesForDay(currentDate).length === 0 ? (
+            {getBatchesForDay(currentDate, batches).length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-8">No classes scheduled for this day.</p>
             ) : (
               <div className="flex flex-col gap-3">
-                {getBatchesForDay(currentDate).map(b => {
-                  const c = getBatchColor(b.id)
+                {getBatchesForDay(currentDate, batches).map(b => {
+                  const c = getBatchColor(b.id, batches)
                   return (
                     <button key={b.id} onClick={() => openBatchPopup(currentDate, b)}
                       className={`w-full text-left p-4 rounded-xl border ${c.bg} ${c.text} ${c.border} hover:opacity-90`}>
@@ -385,10 +380,10 @@ export default function SchedulePage() {
       {selectedBatch && selectedDay && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-end" onClick={() => setSelectedBatch(null)}>
           <div className="bg-white h-full w-96 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className={`px-5 py-4 border-b border-gray-100 ${getBatchColor(selectedBatch.id).bg}`}>
+            <div className={`px-5 py-4 border-b border-gray-100 ${getBatchColor(selectedBatch.id, batches).bg}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className={`font-semibold text-lg ${getBatchColor(selectedBatch.id).text}`}>{selectedBatch.name}</h3>
+                  <h3 className={`font-semibold text-lg ${getBatchColor(selectedBatch.id, batches).text}`}>{selectedBatch.name}</h3>
                   <p className="text-sm text-gray-600 mt-0.5">
                     {selectedDay.getDate()} {MONTH_NAMES[selectedDay.getMonth()]} {selectedDay.getFullYear()}
                   </p>
@@ -406,7 +401,7 @@ export default function SchedulePage() {
             <div className="flex-1 overflow-y-auto p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Students</p>
-                <button onClick={() => setShowAddOverride(true)}
+                <button onClick={() => setShowAddOverride(v => !v)}
                   className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-[#0f2044] text-white rounded-lg hover:bg-blue-900">
                   <Plus size={12} /> Add for today
                 </button>
@@ -453,7 +448,7 @@ export default function SchedulePage() {
                         onChange={e => setOverrideStudentId(e.target.value)}
                       >
                         <option value="">Choose a student</option>
-                        {availableStudentsForOverride.map(s => (
+                        {availableForOverride.map(s => (
                           <option key={s.id} value={s.id}>{s.name} ({s.reg_number})</option>
                         ))}
                       </select>
