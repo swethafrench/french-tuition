@@ -79,6 +79,7 @@ export default function InvoicesPage() {
   // Generate flow state
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState(false)
 
@@ -137,6 +138,7 @@ export default function InvoicesPage() {
       return { student: s, hoursAttended, hourlyRate, monthlyFee, feeType, billableHours, finalAmount }
     })
     setPreviewRows(rows)
+    setSelectedIds(new Set(rows.map(r => r.student.id)))
   }
 
   const updateBillableHours = (studentId: string, val: string) => {
@@ -161,7 +163,9 @@ export default function InvoicesPage() {
   const handleGenerate = async () => {
     setGenerating(true)
     try {
-      const payload = previewRows.map(r => ({
+      const payload = previewRows
+        .filter(r => selectedIds.has(r.student.id))
+        .map(r => ({
         student_id: r.student.id,
         month,
         hours_attended: r.hoursAttended,
@@ -270,7 +274,14 @@ export default function InvoicesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
-                  <th className="text-left px-5 py-3 font-medium">Student</th>
+                  <th className="px-5 py-3 w-10">
+                    <input type="checkbox"
+                      checked={selectedIds.size === previewRows.length && previewRows.length > 0}
+                      onChange={e => setSelectedIds(e.target.checked ? new Set(previewRows.map(r => r.student.id)) : new Set())}
+                      className="rounded border-gray-300 text-blue-600 cursor-pointer"
+                    />
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium">Student</th>
                   <th className="text-left px-5 py-3 font-medium">Fee type</th>
                   <th className="text-center px-4 py-3 font-medium">Hrs attended</th>
                   <th className="text-center px-4 py-3 font-medium">Rate / Base fee</th>
@@ -279,9 +290,22 @@ export default function InvoicesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {previewRows.map(row => (
-                  <tr key={row.student.id} className="hover:bg-gray-50">
+                {previewRows.map(row => {
+                  const isSelected = selectedIds.has(row.student.id)
+                  return (
+                  <tr key={row.student.id} className={`hover:bg-gray-50 ${!isSelected ? 'opacity-40' : ''}`}>
                     <td className="px-5 py-3">
+                      <input type="checkbox"
+                        checked={isSelected}
+                        onChange={e => {
+                          const next = new Set(selectedIds)
+                          e.target.checked ? next.add(row.student.id) : next.delete(row.student.id)
+                          setSelectedIds(next)
+                        }}
+                        className="rounded border-gray-300 text-blue-600 cursor-pointer"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
                       <p className="font-medium text-gray-900">{row.student.name}</p>
                       <p className="text-xs text-gray-400">{row.student.reg_number}</p>
                     </td>
@@ -329,13 +353,15 @@ export default function InvoicesPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
               <tfoot className="bg-gray-50 border-t border-gray-200">
                 <tr>
-                  <td colSpan={5} className="px-5 py-3 text-sm font-semibold text-gray-700">Total</td>
+                  <td colSpan={6} className="px-5 py-3 text-sm font-semibold text-gray-700">
+                    Total ({selectedIds.size} of {previewRows.length} selected)
+                  </td>
                   <td className="px-5 py-3 text-right text-sm font-bold text-gray-900">
-                    ₹{previewRows.reduce((a, r) => a + r.finalAmount, 0).toLocaleString('en-IN')}
+                    ₹{previewRows.filter(r => selectedIds.has(r.student.id)).reduce((a, r) => a + r.finalAmount, 0).toLocaleString('en-IN')}
                   </td>
                 </tr>
               </tfoot>
@@ -347,10 +373,10 @@ export default function InvoicesPage() {
               className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
               Cancel
             </button>
-            <button onClick={handleGenerate} disabled={generating || previewRows.length === 0}
+            <button onClick={handleGenerate} disabled={generating || selectedIds.size === 0}
               className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
               <Send className="w-4 h-4" />
-              {generating ? 'Generating...' : `Generate & send ${previewRows.length} invoice${previewRows.length !== 1 ? 's' : ''}`}
+              {generating ? 'Generating...' : `Generate & send ${selectedIds.size} invoice${selectedIds.size !== 1 ? 's' : ''}`}
             </button>
           </div>
         </div>
@@ -559,13 +585,11 @@ export default function InvoicesPage() {
 function InvoiceDetailModal({ invoice, month, onClose }: { invoice: Invoice; month: string; onClose: () => void }) {
   const [expanded, setExpanded] = useState(false)
 
-  // UPI deep link for GPay / PhonePe / Paytm
-  // Teacher should configure their UPI ID in env or settings; using placeholder for now
+  // UPI deep link — upi:// works on both iOS and Android across all UPI apps
   const upiId = process.env.NEXT_PUBLIC_UPI_ID ?? 'teacher@upi'
   const upiName = encodeURIComponent('Apprenons French Tuition')
   const upiNote = encodeURIComponent(`Invoice ${month} - ${invoice.students?.name}`)
-  const upiLink = `upi://pay?pa=${upiId}&pn=${upiName}&am=${invoice.amount}&cu=INR&tn=${upiNote}`
-  const gPayLink = `intent://pay?pa=${upiId}&pn=${upiName}&am=${invoice.amount}&cu=INR&tn=${upiNote}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`
+  const baseUpi = `upi://pay?pa=${upiId}&pn=${upiName}&am=${invoice.amount}&cu=INR&tn=${upiNote}`
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -648,17 +672,17 @@ function InvoiceDetailModal({ invoice, month, onClose }: { invoice: Invoice; mon
             <div className="border border-gray-200 rounded-xl p-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Pay online</p>
               <div className="grid grid-cols-3 gap-2">
-                <a href={gPayLink}
+                <a href={baseUpi}
                   className="flex flex-col items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-colors">
-                  <span className="text-lg">G</span>
+                  <span className="text-lg font-bold text-[#1a73e8]">G</span>
                   <span className="text-xs text-gray-600 font-medium">GPay</span>
                 </a>
-                <a href={`phonepe://pay?pa=${upiId}&pn=${upiName}&am=${invoice.amount}&cu=INR`}
+                <a href={baseUpi}
                   className="flex flex-col items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-colors">
                   <span className="text-lg">📱</span>
                   <span className="text-xs text-gray-600 font-medium">PhonePe</span>
                 </a>
-                <a href={upiLink}
+                <a href={baseUpi}
                   className="flex flex-col items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-colors">
                   <span className="text-lg">↗</span>
                   <span className="text-xs text-gray-600 font-medium">Any UPI</span>
