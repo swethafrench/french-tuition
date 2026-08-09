@@ -488,10 +488,9 @@ export default function InvoicesPage() {
                           {inv.status === 'sent' && (
                             <button
                               onClick={() => handleMarkOverdue(inv)}
-                              className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
-                              title="Mark overdue"
+                              className="px-2.5 py-1 text-xs font-medium bg-red-50 text-red-600 rounded-lg hover:bg-red-100 border border-red-200"
                             >
-                              <RotateCcw className="w-3.5 h-3.5" />
+                              Mark overdue
                             </button>
                           )}
                         </div>
@@ -589,7 +588,8 @@ function InvoiceDetailModal({ invoice, month, onClose }: { invoice: Invoice; mon
   const upiId = process.env.NEXT_PUBLIC_UPI_ID ?? 'teacher@upi'
   const upiName = encodeURIComponent('Apprenons French Tuition')
   const upiNote = encodeURIComponent(`Invoice ${month} - ${invoice.students?.name}`)
-  const baseUpi = `upi://pay?pa=${upiId}&pn=${upiName}&am=${invoice.amount}&cu=INR&tn=${upiNote}`
+  const upiParams = `pa=${upiId}&pn=${upiName}&am=${invoice.amount}&cu=INR&tn=${upiNote}`
+  const gPayLink = `tez://upi/pay?${upiParams}`
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -671,21 +671,10 @@ function InvoiceDetailModal({ invoice, month, onClose }: { invoice: Invoice; mon
           <div className="px-6 pb-5">
             <div className="border border-gray-200 rounded-xl p-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Pay online</p>
-              <div className="grid grid-cols-3 gap-2">
-                <a href={baseUpi}
-                  className="flex flex-col items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-colors">
-                  <span className="text-lg font-bold text-[#1a73e8]">G</span>
-                  <span className="text-xs text-gray-600 font-medium">GPay</span>
-                </a>
-                <a href={baseUpi}
-                  className="flex flex-col items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-colors">
-                  <span className="text-lg">📱</span>
-                  <span className="text-xs text-gray-600 font-medium">PhonePe</span>
-                </a>
-                <a href={baseUpi}
-                  className="flex flex-col items-center gap-1.5 px-3 py-2.5 bg-white border border-gray-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-colors">
-                  <span className="text-lg">↗</span>
-                  <span className="text-xs text-gray-600 font-medium">Any UPI</span>
+              <div className="mt-3">
+                <a href={gPayLink}
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-[#1a73e8] text-white text-sm font-medium rounded-xl hover:bg-[#1557b0] transition-colors">
+                  <span className="font-bold">G</span> Pay with Google Pay
                 </a>
               </div>
               <button
