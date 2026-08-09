@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Pencil, Check } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { ChevronLeft, ChevronRight, Pencil, Check, Calendar } from 'lucide-react'
 import api from '@/lib/api'
 import { Student } from '@/types'
 
@@ -10,7 +10,7 @@ type Status = 'present' | 'absent' | 'leave' | null
 interface AttendanceRecord {
   student: Student
   status: Status
-  savedStatus: Status   // what's in DB (null = not submitted yet)
+  savedStatus: Status
 }
 
 interface Batch {
@@ -18,7 +18,6 @@ interface Batch {
   start_time: string; end_time: string
 }
 
-// Returns local YYYY-MM-DD for a Date object
 function toLocal(d: Date) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -26,10 +25,131 @@ function toLocal(d: Date) {
   return `${y}-${m}-${day}`
 }
 
-function startOfDay() {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
+function startOfDay(d?: Date) {
+  const date = d ? new Date(d) : new Date()
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+const MONTH_NAMES = ['January','February','March','April','May','June',
+  'July','August','September','October','November','December']
+const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa']
+
+function DatePickerCalendar({
+  selected, today, onSelect, onClose
+}: {
+  selected: Date; today: Date; onSelect: (d: Date) => void; onClose: () => void
+}) {
+  const [viewYear, setViewYear] = useState(selected.getFullYear())
+  const [viewMonth, setViewMonth] = useState(selected.getMonth())
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+
+  // Build calendar grid
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay()
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  ]
+  // Pad to complete weeks
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const isSel = (day: number) =>
+    day === selected.getDate() && viewMonth === selected.getMonth() && viewYear === selected.getFullYear()
+  const isToday = (day: number) =>
+    day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
+  const isFuture = (day: number) => {
+    const d = new Date(viewYear, viewMonth, day)
+    d.setHours(0,0,0,0)
+    return d > today
+  }
+  const isSunday = (day: number) => new Date(viewYear, viewMonth, day).getDay() === 0
+
+  // Can't go forward past current month
+  const atMaxMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth()
+
+  return (
+    <div ref={ref}
+      className="absolute right-0 top-full mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 w-72 select-none"
+    >
+      {/* Month nav */}
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <span className="text-sm font-semibold text-gray-900">
+          {MONTH_NAMES[viewMonth]} {viewYear}
+        </span>
+        <button onClick={nextMonth} disabled={atMaxMonth}
+          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 disabled:opacity-30 disabled:cursor-not-allowed">
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Day labels */}
+      <div className="grid grid-cols-7 mb-1">
+        {DAY_LABELS.map(d => (
+          <div key={d} className={`text-center text-[10px] font-medium pb-1 ${d === 'Su' ? 'text-red-400' : 'text-gray-400'}`}>
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Days grid */}
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />
+          const disabled = isFuture(day) || isSunday(day)
+          const sel = isSel(day)
+          const tod = isToday(day)
+          return (
+            <button
+              key={i}
+              disabled={disabled}
+              onClick={() => { onSelect(startOfDay(new Date(viewYear, viewMonth, day))); onClose() }}
+              className={[
+                'w-full aspect-square flex items-center justify-center rounded-lg text-xs font-medium transition-colors',
+                disabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-blue-50 hover:text-blue-700 cursor-pointer',
+                sel ? 'bg-blue-600 text-white hover:bg-blue-600 hover:text-white' : '',
+                tod && !sel ? 'text-blue-600 font-bold ring-1 ring-blue-300' : '',
+                isSunday(day) && !disabled ? 'text-red-400' : '',
+              ].join(' ')}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Today shortcut */}
+      <div className="mt-3 pt-3 border-t border-gray-100 flex justify-center">
+        <button
+          onClick={() => { onSelect(startOfDay()); onClose() }}
+          className="text-xs font-medium text-blue-600 hover:text-blue-800"
+        >
+          Go to today
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export default function AttendancePage() {
@@ -37,24 +157,23 @@ export default function AttendancePage() {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [editMode, setEditMode] = useState(false)   // true when editing already-submitted day
-  const [isSubmitted, setIsSubmitted] = useState(false) // true when this date's attendance is in DB
+  const [editMode, setEditMode] = useState(false)
+  const [isSubmitted, setIsSubmitted] = useState(false)
   const [batches, setBatches] = useState<Batch[]>([])
   const [scheduledBatchNames, setScheduledBatchNames] = useState<string[]>([])
+  const [showPicker, setShowPicker] = useState(false)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
 
-  const dateStr = toLocal(selectedDate)
-  const dayOfWeek = selectedDate.getDay() // 0=Sun,1=Mon...
   const today = startOfDay()
-  const isToday = toLocal(selectedDate) === toLocal(today)
+  const dateStr = toLocal(selectedDate)
+  const isToday = dateStr === toLocal(today)
   const isFuture = selectedDate > today
 
   const displayDate = selectedDate.toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   })
 
-  // Fetch batches once
   useEffect(() => {
     api.get('/api/batches').then(res => setBatches(res.data))
   }, [])
@@ -64,39 +183,29 @@ export default function AttendancePage() {
     setError('')
     setSuccessMsg('')
     setEditMode(false)
-
     const ds = toLocal(date)
     const dow = date.getDay()
-
     try {
       const [studRes, attRes] = await Promise.all([
         api.get('/api/students'),
         api.get(`/api/attendance?date=${ds}`)
       ])
-
       const allStudents: Student[] = studRes.data
       const attMap: Record<string, Status> = {}
-      for (const a of attRes.data) {
-        attMap[a.student_id] = a.status
-      }
+      for (const a of attRes.data) attMap[a.student_id] = a.status
 
-      // Find batches scheduled on this day
       const todayBatches = batches.filter(b => b.days.includes(dow))
       setScheduledBatchNames(todayBatches.map(b => b.name))
 
-      // If batches exist for today, filter students to those batches;
-      // otherwise show all students
       let filtered = allStudents
       if (todayBatches.length > 0) {
         const batchIds = new Set(todayBatches.map(b => b.id))
-        filtered = allStudents.filter(s => (s as Student & { batch_id?: string }).batch_id && batchIds.has((s as Student & { batch_id?: string }).batch_id!))
-        // If no students match (e.g. batch not assigned), fall back to all
-        if (filtered.length === 0) filtered = allStudents
+        const inBatch = allStudents.filter(s => (s as Student & { batch_id?: string }).batch_id &&
+          batchIds.has((s as Student & { batch_id?: string }).batch_id!))
+        if (inBatch.length > 0) filtered = inBatch
       }
 
-      const hasSubmitted = attRes.data.length > 0
-      setIsSubmitted(hasSubmitted)
-
+      setIsSubmitted(attRes.data.length > 0)
       setRecords(filtered.map(s => ({
         student: s,
         status: attMap[s.id] ?? null,
@@ -109,27 +218,23 @@ export default function AttendancePage() {
     }
   }, [batches])
 
-  // Reload when date or batches change
   useEffect(() => {
-    if (batches.length >= 0) loadDay(selectedDate)
+    loadDay(selectedDate)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, batches])
 
   const navigate = (dir: -1 | 1) => {
     const d = new Date(selectedDate)
     d.setDate(d.getDate() + dir)
-    // Skip Sundays
-    if (d.getDay() === 0) d.setDate(d.getDate() + dir)
+    if (d.getDay() === 0) d.setDate(d.getDate() + dir) // skip Sunday
+    if (d > today) return
     setSelectedDate(d)
   }
 
   const setStatus = (id: string, status: Status) => {
-    setRecords(r => r.map(rec =>
-      rec.student.id === id ? { ...rec, status } : rec
-    ))
+    setRecords(r => r.map(rec => rec.student.id === id ? { ...rec, status } : rec))
     setSuccessMsg('')
   }
-
   const markAll = (status: Status) => {
     setRecords(r => r.map(rec => ({ ...rec, status })))
     setSuccessMsg('')
@@ -145,11 +250,7 @@ export default function AttendancePage() {
     setSaving(true)
     try {
       await api.post('/api/attendance/bulk', {
-        records: records.map(r => ({
-          student_id: r.student.id,
-          class_date: dateStr,
-          status: r.status,
-        }))
+        records: records.map(r => ({ student_id: r.student.id, class_date: dateStr, status: r.status }))
       })
       setIsSubmitted(true)
       setEditMode(false)
@@ -162,66 +263,59 @@ export default function AttendancePage() {
     }
   }
 
-  const handleEdit = () => {
-    setEditMode(true)
-    setSuccessMsg('')
-    setError('')
-  }
-
-  const handleCancelEdit = () => {
-    setEditMode(false)
-    setRecords(r => r.map(rec => ({ ...rec, status: rec.savedStatus })))
-    setError('')
-  }
-
   const presentCount = records.filter(r => (isSubmitted && !editMode ? r.savedStatus : r.status) === 'present').length
   const absentCount  = records.filter(r => (isSubmitted && !editMode ? r.savedStatus : r.status) === 'absent').length
   const leaveCount   = records.filter(r => (isSubmitted && !editMode ? r.savedStatus : r.status) === 'leave').length
   const unmarkedCount = records.filter(r => r.status === null).length
-
   const canEdit = isSubmitted && !editMode && !isFuture
   const showMarkingUI = !isSubmitted || editMode
 
   return (
     <div className="p-6 max-w-3xl">
-      {/* Header + Date Navigator */}
-      <div className="mb-6 flex items-start justify-between">
+      {/* Header */}
+      <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Mark attendance</h1>
           <p className="text-sm text-gray-500 mt-1">{displayDate}</p>
           {scheduledBatchNames.length > 0 && (
-            <p className="text-xs text-blue-600 mt-0.5">
-              Scheduled: {scheduledBatchNames.join(', ')}
-            </p>
+            <p className="text-xs text-blue-600 mt-0.5">Scheduled: {scheduledBatchNames.join(', ')}</p>
           )}
         </div>
-        <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl px-2 py-1.5">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors"
-            title="Previous day"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span className="text-xs font-medium text-gray-700 px-2 min-w-[80px] text-center">
-            {isToday ? 'Today' : selectedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-          </span>
-          <button
-            onClick={() => navigate(1)}
-            disabled={isToday}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Next day"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          {!isToday && (
-            <button
-              onClick={() => setSelectedDate(startOfDay())}
-              className="ml-1 px-2.5 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-            >
-              Today
+
+        {/* Date controls */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Prev / Next */}
+          <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-xl px-1.5 py-1.5">
+            <button onClick={() => navigate(-1)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+              <ChevronLeft className="w-4 h-4" />
             </button>
-          )}
+            <button onClick={() => navigate(1)} disabled={isToday}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Date picker trigger */}
+          <div className="relative">
+            <button
+              onClick={() => setShowPicker(v => !v)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition-colors
+                ${showPicker ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+            >
+              <Calendar className="w-4 h-4" />
+              <span>{isToday ? 'Today' : selectedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            </button>
+
+            {showPicker && (
+              <DatePickerCalendar
+                selected={selectedDate}
+                today={today}
+                onSelect={d => { setSelectedDate(d); setShowPicker(false) }}
+                onClose={() => setShowPicker(false)}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -234,8 +328,6 @@ export default function AttendancePage() {
           <Check className="w-4 h-4" /> {successMsg}
         </div>
       )}
-
-      {/* Future date notice */}
       {isFuture && !loading && (
         <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
           You can only mark attendance for today or past dates.
@@ -285,28 +377,25 @@ export default function AttendancePage() {
                   </span>
                 )}
                 {editMode && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                    Editing
-                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Editing</span>
                 )}
               </div>
-
               <div className="flex items-center gap-2">
                 {showMarkingUI && !isFuture && (
                   <>
-                    <button onClick={() => markAll('present')} className="px-3 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded-lg hover:bg-green-200">
+                    <button onClick={() => markAll('present')}
+                      className="px-3 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded-lg hover:bg-green-200">
                       Mark all present
                     </button>
-                    <button onClick={() => markAll('absent')} className="px-3 py-1.5 text-xs font-medium bg-red-100 text-red-700 rounded-lg hover:bg-red-200">
+                    <button onClick={() => markAll('absent')}
+                      className="px-3 py-1.5 text-xs font-medium bg-red-100 text-red-700 rounded-lg hover:bg-red-200">
                       Mark all absent
                     </button>
                   </>
                 )}
                 {canEdit && (
-                  <button
-                    onClick={handleEdit}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                  >
+                  <button onClick={() => { setEditMode(true); setSuccessMsg(''); setError('') }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
                     <Pencil className="w-3 h-3" /> Edit attendance
                   </button>
                 )}
@@ -325,8 +414,6 @@ export default function AttendancePage() {
                       <p className="text-sm font-medium text-gray-900">{student.name}</p>
                       <p className="text-xs text-gray-400">{student.school_name} · {student.grade} · {student.mode}</p>
                     </div>
-
-                    {/* View-only pill when submitted and not editing */}
                     {isSubmitted && !editMode ? (
                       <StatusPill status={displayStatus} />
                     ) : isFuture ? (
@@ -352,23 +439,18 @@ export default function AttendancePage() {
               })}
             </div>
 
-            {/* Footer actions */}
             {!isFuture && (
               <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-3">
                 {editMode && (
                   <button
-                    onClick={handleCancelEdit}
-                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
-                  >
+                    onClick={() => { setEditMode(false); setRecords(r => r.map(rec => ({ ...rec, status: rec.savedStatus }))); setError('') }}
+                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
                     Cancel
                   </button>
                 )}
                 {showMarkingUI && (
-                  <button
-                    onClick={handleSubmit}
-                    disabled={saving}
-                    className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  >
+                  <button onClick={handleSubmit} disabled={saving}
+                    className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
                     {saving ? 'Saving...' : editMode ? 'Update attendance' : 'Submit attendance'}
                   </button>
                 )}
@@ -383,27 +465,16 @@ export default function AttendancePage() {
 
 function StatusPill({ status }: { status: Status }) {
   if (!status) return <span className="text-xs text-gray-400 italic">—</span>
-  const map = {
-    present: 'bg-green-100 text-green-700',
-    absent:  'bg-red-100 text-red-700',
-    leave:   'bg-amber-100 text-amber-700',
-  }
-  return (
-    <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${map[status]}`}>
-      {status}
-    </span>
-  )
+  const map = { present: 'bg-green-100 text-green-700', absent: 'bg-red-100 text-red-700', leave: 'bg-amber-100 text-amber-700' }
+  return <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${map[status]}`}>{status}</span>
 }
 
 function StatusBtn({ label, active, activeClass, inactiveClass, onClick }: {
-  label: string; active: boolean
-  activeClass: string; inactiveClass: string; onClick: () => void
+  label: string; active: boolean; activeClass: string; inactiveClass: string; onClick: () => void
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${active ? activeClass : inactiveClass}`}
-    >
+    <button onClick={onClick}
+      className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${active ? activeClass : inactiveClass}`}>
       {label}
     </button>
   )
