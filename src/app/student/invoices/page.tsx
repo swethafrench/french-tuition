@@ -5,11 +5,18 @@ import { CheckCircle, ChevronDown, ChevronUp, Clock, AlertCircle } from 'lucide-
 import api from '@/lib/api'
 
 interface Invoice {
-  id: string; month: string; hours_attended: number; hours_billed: number
-  hourly_rate: number; amount: number; fee_type: string
+  id: string
+  month: string
+  hours_attended: number
+  hours_billed: number
+  hourly_rate: number
+  amount: number
+  fee_type: string
   status: 'draft' | 'sent' | 'paid' | 'overdue'
-  sent_at: string | null; paid_at: string | null
-  payment_mode: string | null; upi_txn_id: string | null
+  sent_at: string | null
+  paid_at: string | null
+  payment_mode: string | null
+  upi_txn_id: string | null
 }
 
 function fmtMonth(m: string) {
@@ -21,8 +28,6 @@ export default function StudentInvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [openId, setOpenId] = useState<string | null>(null)
-  const upiId = process.env.NEXT_PUBLIC_UPI_ID ?? 'teacher@upi'
-  const upiName = encodeURIComponent('Apprenons French Tuition')
 
   useEffect(() => {
     const s = localStorage.getItem('student')
@@ -31,11 +36,15 @@ export default function StudentInvoicesPage() {
     api.get('/api/invoices', { params: { student_id: student.id } })
       .then(r => {
         setInvoices(r.data)
+        // Auto-open latest unpaid
         const unpaid = r.data.find((i: Invoice) => i.status === 'sent' || i.status === 'overdue')
         if (unpaid) setOpenId(unpaid.id)
       })
       .finally(() => setLoading(false))
   }, [])
+
+  const upiId = process.env.NEXT_PUBLIC_UPI_ID ?? 'teacher@upi'
+  const upiName = encodeURIComponent('Apprenons French Tuition')
 
   const currentMonth = new Date().toISOString().slice(0, 7)
   const currentInvoice = invoices.find(i => i.month === currentMonth)
@@ -64,6 +73,7 @@ export default function StudentInvoicesPage() {
       <h1 className="text-lg font-semibold text-gray-900 mb-1">Invoices</h1>
       <p className="text-sm text-gray-500 mb-4">Your monthly fee invoices</p>
 
+      {/* Summary strip */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
           <p className="text-lg font-bold text-green-700">₹{totalPaid.toLocaleString('en-IN')}</p>
@@ -87,25 +97,29 @@ export default function StudentInvoicesPage() {
         </div>
       </div>
 
+      {/* Invoice cards */}
       <div className="space-y-3">
         {invoices.map(inv => {
           const isOpen = openId === inv.id
           const upiNote = encodeURIComponent(`Invoice ${inv.month}`)
-          const upiParams = `pa=${upiId}&pn=${upiName}&am=${inv.amount}&cu=INR&tn=${upiNote}`
-          const gPayLink = `tez://upi/pay?${upiParams}`
+          const baseUpi = `upi://pay?pa=${upiId}&pn=${upiName}&am=${inv.amount}&cu=INR&tn=${upiNote}`
 
           return (
-            <div key={inv.id} className={`bg-white rounded-2xl border overflow-hidden ${
+            <div key={inv.id} className={`bg-white rounded-2xl border overflow-hidden transition-all ${
               inv.status === 'overdue' ? 'border-red-200' :
               inv.status === 'sent' ? 'border-blue-200' :
               inv.status === 'paid' ? 'border-green-200' : 'border-gray-200'
             }`}>
-              <button onClick={() => setOpenId(isOpen ? null : inv.id)}
-                className="w-full flex items-center justify-between px-4 py-4 text-left">
+              {/* Card header — always visible */}
+              <button
+                onClick={() => setOpenId(isOpen ? null : inv.id)}
+                className="w-full flex items-center justify-between px-4 py-4 text-left"
+              >
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                     inv.status === 'paid' ? 'bg-green-100' :
-                    inv.status === 'overdue' ? 'bg-red-100' : 'bg-blue-100'
+                    inv.status === 'overdue' ? 'bg-red-100' :
+                    inv.status === 'sent' ? 'bg-blue-100' : 'bg-gray-100'
                   }`}>
                     {inv.status === 'paid' ? <CheckCircle className="w-4 h-4 text-green-600" /> :
                      inv.status === 'overdue' ? <AlertCircle className="w-4 h-4 text-red-500" /> :
@@ -113,13 +127,15 @@ export default function StudentInvoicesPage() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-gray-900">{fmtMonth(inv.month)}</p>
-                    <p className={`text-xs mt-0.5 ${
+                    <p className={`text-xs mt-0.5 capitalize ${
                       inv.status === 'paid' ? 'text-green-600' :
-                      inv.status === 'overdue' ? 'text-red-500' : 'text-blue-600'
+                      inv.status === 'overdue' ? 'text-red-500' :
+                      'text-blue-600'
                     }`}>
                       {inv.status === 'paid' && inv.paid_at
                         ? `Paid on ${new Date(inv.paid_at).toLocaleDateString('en-IN')}`
-                        : inv.status === 'overdue' ? 'Payment overdue' : 'Payment pending'}
+                        : inv.status === 'overdue' ? 'Payment overdue'
+                        : 'Payment pending'}
                     </p>
                   </div>
                 </div>
@@ -129,8 +145,10 @@ export default function StudentInvoicesPage() {
                 </div>
               </button>
 
+              {/* Expanded detail */}
               {isOpen && (
                 <div className="px-4 pb-4 border-t border-gray-100 pt-4">
+                  {/* Line items */}
                   <div className="space-y-2 mb-4">
                     {inv.fee_type === 'hourly' ? (
                       <>
@@ -163,13 +181,23 @@ export default function StudentInvoicesPage() {
                     </div>
                   )}
 
+                  {/* Pay buttons */}
                   {(inv.status === 'sent' || inv.status === 'overdue') && (
                     <div className="space-y-2">
-                      <a href={gPayLink}
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pay now</p>
+                      <a href={baseUpi}
                         className="flex items-center justify-center gap-2 w-full py-3 bg-[#1a73e8] text-white text-sm font-medium rounded-xl hover:bg-[#1557b0] transition-colors">
                         <span className="font-bold">G</span> Pay with Google Pay
                       </a>
-                      <p className="text-xs text-gray-400 text-center">
+                      <a href={baseUpi}
+                        className="flex items-center justify-center gap-2 w-full py-3 bg-[#5f259f] text-white text-sm font-medium rounded-xl hover:bg-[#4a1a7c] transition-colors">
+                        📱 Pay with PhonePe
+                      </a>
+                      <a href={baseUpi}
+                        className="flex items-center justify-center gap-2 w-full py-3 border border-gray-300 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">
+                        ↗ Any UPI app
+                      </a>
+                      <p className="text-xs text-gray-400 text-center mt-2">
                         After payment, your teacher will confirm and mark it as paid.
                       </p>
                     </div>
