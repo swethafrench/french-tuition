@@ -3,13 +3,14 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Image from 'next/image'
-import { CalendarDays, CalendarOff, CreditCard, User } from 'lucide-react'
+import { CalendarDays, CalendarOff, CreditCard, User, Receipt } from 'lucide-react'
 
 const navItems = [
-  { href: '/student/calendar', label: 'Calendar', icon: CalendarDays },
-  { href: '/student/leave',    label: 'Leave',    icon: CalendarOff },
-  { href: '/student/fees',     label: 'Fees',     icon: CreditCard },
-  { href: '/student/profile',  label: 'Profile',  icon: User },
+  { href: '/student/calendar',  label: 'Calendar', icon: CalendarDays },
+  { href: '/student/leave',     label: 'Leave',    icon: CalendarOff },
+  { href: '/student/fees',      label: 'Fees',     icon: CreditCard },
+  { href: '/student/invoices',  label: 'Invoices', icon: Receipt },
+  { href: '/student/profile',   label: 'Profile',  icon: User },
 ]
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {

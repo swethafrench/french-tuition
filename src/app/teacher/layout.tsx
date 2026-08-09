@@ -7,7 +7,7 @@ import { useEffect } from 'react'
 import {
   LayoutDashboard, UserPlus, CalendarDays,
   ClipboardCheck, BarChart2, CreditCard,
-  Settings, Users, LogOut
+  Settings, Users, LogOut, Receipt
 } from 'lucide-react'
 
 const navItems = [
@@ -18,6 +18,7 @@ const navItems = [
   { href: '/teacher/attendance', label: 'Mark attendance',  icon: ClipboardCheck },
   { href: '/teacher/reports',    label: 'Reports',          icon: BarChart2 },
   { href: '/teacher/fees',       label: 'Fee management',   icon: CreditCard },
+  { href: '/teacher/invoices',   label: 'Invoices',         icon: Receipt },
   { href: '/teacher/masters',    label: 'Masters',          icon: Settings },
 ]
 
