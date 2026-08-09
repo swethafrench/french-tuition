@@ -10,9 +10,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const student_id = searchParams.get('student_id')
   const month = searchParams.get('month')
+  const date = searchParams.get('date')
   let q = sb.from('attendance').select('*')
   if (student_id) q = q.eq('student_id', student_id)
-  if (month) q = q.gte('class_date', `${month}-01`).lte('class_date', `${month}-31`)
+  if (date) q = q.eq('class_date', date)
+  else if (month) q = q.gte('class_date', `${month}-01`).lte('class_date', `${month}-31`)
   const { data } = await q.order('class_date', { ascending: false })
   return NextResponse.json(data ?? [])
 }
