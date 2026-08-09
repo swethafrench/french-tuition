@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, Clock, AlertCircle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { CheckCircle, ChevronDown, ChevronUp, Clock, AlertCircle, Copy, Check } from 'lucide-react'
+import QRCode from 'qrcode'
 import api from '@/lib/api'
 
 interface Invoice {
@@ -102,7 +103,7 @@ export default function StudentInvoicesPage() {
         {invoices.map(inv => {
           const isOpen = openId === inv.id
           const upiNote = encodeURIComponent(`Invoice ${inv.month}`)
-          const baseUpi = `upi://pay?pa=${upiId}&pn=${upiName}&am=${inv.amount}&cu=INR&tn=${upiNote}`
+          const upiParams = `pa=${upiId}&pn=${upiName}&am=${inv.amount}&cu=INR&tn=${upiNote}`
 
           return (
             <div key={inv.id} className={`bg-white rounded-2xl border overflow-hidden transition-all ${
@@ -180,34 +181,61 @@ export default function StudentInvoicesPage() {
                       </span>
                     </div>
                   )}
-
-                  {/* Pay buttons */}
                   {(inv.status === 'sent' || inv.status === 'overdue') && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pay now</p>
-                      <a href={baseUpi}
-                        className="flex items-center justify-center gap-2 w-full py-3 bg-[#1a73e8] text-white text-sm font-medium rounded-xl hover:bg-[#1557b0] transition-colors">
-                        <span className="font-bold">G</span> Pay with Google Pay
-                      </a>
-                      <a href={baseUpi}
-                        className="flex items-center justify-center gap-2 w-full py-3 bg-[#5f259f] text-white text-sm font-medium rounded-xl hover:bg-[#4a1a7c] transition-colors">
-                        📱 Pay with PhonePe
-                      </a>
-                      <a href={baseUpi}
-                        className="flex items-center justify-center gap-2 w-full py-3 border border-gray-300 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">
-                        ↗ Any UPI app
-                      </a>
-                      <p className="text-xs text-gray-400 text-center mt-2">
-                        After payment, your teacher will confirm and mark it as paid.
-                      </p>
-                    </div>
+                    <UpiQR upiString={`upi://pay?${upiParams}`} amount={inv.amount} upiId={upiId} />
                   )}
-                </div>
-              )}
-            </div>
-          )
-        })}
       </div>
+    </div>
+  )
+}
+
+
+function UpiQR({ upiString, amount, upiId }: { upiString: string; amount: number; upiId: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      QRCode.toCanvas(canvasRef.current, upiString, {
+        width: 200, margin: 2,
+        color: { dark: '#0d1b2a', light: '#ffffff' }
+      })
+    }
+  }, [upiString])
+
+  const copyUpiId = () => {
+    navigator.clipboard.writeText(upiId)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-center mb-3">
+        Scan to pay ₹{amount.toLocaleString("en-IN")}
+      </p>
+      <div className="flex justify-center mb-3">
+        <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100">
+          <canvas ref={canvasRef} />
+        </div>
+      </div>
+      <p className="text-xs text-gray-500 text-center mb-2">
+        Open GPay, PhonePe, or any UPI app and scan
+      </p>
+      <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3 py-2 mt-3">
+        <div>
+          <p className="text-xs text-gray-400">UPI ID</p>
+          <p className="text-sm font-mono font-medium text-gray-800">{upiId}</p>
+        </div>
+        <button onClick={copyUpiId}
+          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+          {copied ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+          {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
+      <p className="text-xs text-gray-400 text-center mt-3">
+        After payment, your teacher will confirm and mark it as paid.
+      </p>
     </div>
   )
 }
