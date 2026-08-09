@@ -88,13 +88,11 @@ export default function SchedulePage() {
     setOverrideNote('')
     setOverrideDate(dateStr)
     setPopupLoading(true)
-    setDebugMsg('Fetching...')
 
     try {
       const dow = clickedDate.getDay() === 0 ? 6 : clickedDate.getDay() - 1
       const isRegDay = batch.days.includes(dow)
 
-      setDebugMsg(`date=${dateStr} dow=${dow} isRegDay=${isRegDay} batchDays=${JSON.stringify(batch.days)}`)
 
       const [sRes, oRes] = await Promise.all([
         api.get('/api/students-with-batch'),
@@ -105,7 +103,6 @@ export default function SchedulePage() {
       const o: BatchOverride[] = oRes.data ?? []
 
       const inBatch = s.filter(st => st.batch_id === batch.id)
-      setDebugMsg(`students=${s.length} inBatch=${inBatch.length} batchId=${batch.id} firstStudentBatchId=${s[0]?.batch_id}`)
 
       const regular: BatchStudentDetail[] = isRegDay
         ? s.filter(st => st.batch_id === batch.id).map(st => ({ ...st, is_override: false }))
@@ -128,7 +125,6 @@ export default function SchedulePage() {
       setBatchStudents(combined)
       setAvailableForOverride(available)
     } catch(err) {
-      setDebugMsg('Error: ' + String(err))
     } finally {
       setPopupLoading(false)
     }
@@ -374,11 +370,6 @@ export default function SchedulePage() {
               </div>
             </div>
 
-            {/* DEBUG MESSAGE */}
-            {debugMsg && (
-              <div className="px-4 py-2 bg-yellow-50 border-b border-yellow-200">
-                <p className="text-xs text-yellow-800 font-mono break-all">{debugMsg}</p>
-              </div>
             )}
 
             <div className="flex-1 overflow-y-auto p-4">
