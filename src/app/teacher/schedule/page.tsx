@@ -22,6 +22,13 @@ interface BatchStudentDetail {
   id: string; name: string; reg_number: string; mode: string; is_override?: boolean
 }
 
+const toLocal = (d: Date) => {
+  const y = d.getFullYear()
+  const m = String(d.getMonth()+1).padStart(2,'0')
+  const day = String(d.getDate()).padStart(2,'0')
+  return `${y}-${m}-${day}`
+}
+
 const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 const FULL_DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -70,7 +77,7 @@ export default function SchedulePage() {
   }
 
   const handleBatchClick = async (clickedDate: Date, batch: Batch) => {
-    const dateStr = clickedDate.toISOString().split('T')[0]
+    const dateStr = toLocal(clickedDate)
     setSelectedDay(clickedDate)
     setSelectedBatch(batch)
     setBatchStudents([])
@@ -140,7 +147,7 @@ export default function SchedulePage() {
 
   const handleRemoveOverride = async (studentId: string) => {
     if (!selectedDay || !selectedBatch) return
-    const dateStr = selectedDay.toISOString().split('T')[0]
+    const dateStr = toLocal(selectedDay)
     const oRes = await api.get('/api/batch-overrides', { params: { date: dateStr } })
     const ov = (oRes.data as BatchOverride[]).find(o =>
       o.student_id === studentId && o.override_date === dateStr
@@ -172,13 +179,11 @@ export default function SchedulePage() {
     const dow = d.getDay()===0?6:d.getDay()-1
     d.setDate(d.getDate()-dow)
     return Array(7).fill(0).map((_,i) => {
-      const dd = new Date(d)
-      dd.setDate(d.getDate()+i)
-      return dd
+      const dd = new Date(d); dd.setDate(d.getDate()+i); return dd
     })
   }
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = toLocal(new Date())
 
   const navLabel = () => {
     if (view==='month') return `${MONTH_NAMES[month]} ${year}`
@@ -245,7 +250,7 @@ export default function SchedulePage() {
               {week.map((day,di) => {
                 if (!day) return <div key={di} className="min-h-24 border-r border-gray-100 last:border-0 bg-gray-50/50"/>
                 const d = new Date(year, month, day)
-                const isToday = d.toISOString().split('T')[0] === todayStr
+                const isToday = toLocal(d) === todayStr
                 const db = batchesForDay(d)
                 return (
                   <div key={di} className={`min-h-24 border-r border-gray-100 last:border-0 p-1.5 ${isToday?'bg-blue-50/50':'hover:bg-gray-50'}`}>
@@ -273,7 +278,7 @@ export default function SchedulePage() {
         <div className="bg-white rounded-xl border border-gray-200">
           <div className="grid grid-cols-7 border-b border-gray-100">
             {weekDates().map((d,i) => {
-              const isToday = d.toISOString().split('T')[0] === todayStr
+              const isToday = toLocal(d) === todayStr
               return (
                 <div key={i} className={`py-3 text-center border-r border-gray-100 last:border-0 ${isToday?'bg-blue-50':''}`}>
                   <p className="text-xs text-gray-500">{DAY_NAMES[i]}</p>
@@ -284,7 +289,7 @@ export default function SchedulePage() {
           </div>
           <div className="grid grid-cols-7 min-h-48">
             {weekDates().map((d,i) => {
-              const isToday = d.toISOString().split('T')[0] === todayStr
+              const isToday = toLocal(d) === todayStr
               const db = batchesForDay(d)
               return (
                 <div key={i} className={`border-r border-gray-100 last:border-0 p-2 ${isToday?'bg-blue-50/30':''}`}>
@@ -309,7 +314,7 @@ export default function SchedulePage() {
 
       {view==='day' && (
         <div className="bg-white rounded-xl border border-gray-200">
-          <div className={`px-5 py-4 border-b border-gray-100 ${currentDate.toISOString().split('T')[0]===todayStr?'bg-blue-50':''}`}>
+          <div className={`px-5 py-4 border-b border-gray-100 ${toLocal(currentDate)===todayStr?'bg-blue-50':''}`}>
             <h3 className="font-semibold text-gray-900">
               {FULL_DAY_NAMES[currentDate.getDay()===0?6:currentDate.getDay()-1]}, {currentDate.getDate()} {MONTH_NAMES[month]} {year}
             </h3>
