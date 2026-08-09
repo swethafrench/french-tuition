@@ -221,7 +221,7 @@ export default function EditStudentPage() {
           <Field label="Grade">
             <select className={inp} value={form.grade} onChange={e => set('grade', e.target.value)}>
               <option value="">Select grade</option>
-              {['Grade 6','Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12'].map(g => (
+              {['Grade 6','Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12','Other'].map(g => (
                 <option key={g}>{g}</option>
               ))}
             </select>
