@@ -8,7 +8,10 @@ export interface Student {
   grade: string
   mode: 'online' | 'direct'
   join_date: string
+  fee_type: 'fixed' | 'hourly'
   monthly_fee: number
+  hourly_rate: number | null
+  hours_per_month: number | null
   payment_cycle: string
   due_day: number
   is_active: boolean
