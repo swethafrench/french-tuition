@@ -181,14 +181,19 @@ export default function StudentInvoicesPage() {
                       </span>
                     </div>
                   )}
+
                   {(inv.status === 'sent' || inv.status === 'overdue') && (
                     <UpiQR upiString={`upi://pay?${upiParams}`} amount={inv.amount} upiId={upiId} />
                   )}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
 }
-
 
 function UpiQR({ upiString, amount, upiId }: { upiString: string; amount: number; upiId: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -197,7 +202,8 @@ function UpiQR({ upiString, amount, upiId }: { upiString: string; amount: number
   useEffect(() => {
     if (canvasRef.current) {
       QRCode.toCanvas(canvasRef.current, upiString, {
-        width: 200, margin: 2,
+        width: 200,
+        margin: 2,
         color: { dark: '#0d1b2a', light: '#ffffff' }
       })
     }
@@ -212,7 +218,7 @@ function UpiQR({ upiString, amount, upiId }: { upiString: string; amount: number
   return (
     <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-center mb-3">
-        Scan to pay ₹{amount.toLocaleString("en-IN")}
+        Scan to pay ₹{amount.toLocaleString('en-IN')}
       </p>
       <div className="flex justify-center mb-3">
         <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100">
@@ -220,7 +226,7 @@ function UpiQR({ upiString, amount, upiId }: { upiString: string; amount: number
         </div>
       </div>
       <p className="text-xs text-gray-500 text-center mb-2">
-        Open GPay, PhonePe, or any UPI app and scan
+        Open GPay, PhonePe, or any UPI app → Scan QR
       </p>
       <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3 py-2 mt-3">
         <div>
@@ -228,9 +234,9 @@ function UpiQR({ upiString, amount, upiId }: { upiString: string; amount: number
           <p className="text-sm font-mono font-medium text-gray-800">{upiId}</p>
         </div>
         <button onClick={copyUpiId}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">
           {copied ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
-          {copied ? "Copied!" : "Copy"}
+          {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
       <p className="text-xs text-gray-400 text-center mt-3">
