@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import api from '@/lib/api'
 
 interface Batch {
-  batch_id: string; id?: string; name: string; days: number[]
+  id: string; name: string; days: number[]
   start_time: string; end_time: string; student_count?: number
 }
 interface Student {
