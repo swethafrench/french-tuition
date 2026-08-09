@@ -370,8 +370,6 @@ export default function SchedulePage() {
               </div>
             </div>
 
-            )}
-
             <div className="flex-1 overflow-y-auto p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Students</p>
