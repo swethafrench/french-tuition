@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+export const dynamic = 'force-dynamic'
+
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -15,10 +17,12 @@ export async function GET(req: NextRequest) {
     .select('*, students(id, name, reg_number), batches(id, name, start_time, end_time, days)')
 
   if (date) q = q.eq('override_date', date)
-  if (month) q = q.gte('override_date', `${month}-01`).lte('override_date', `${month}-31`)
+  else if (month) {
+    q = q.gte('override_date', `${month}-01`).lte('override_date', `${month}-31`)
+  }
 
   const { data, error } = await q.order('override_date')
-  if (error) return NextResponse.json({ detail: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ detail: error.message, hint: error.hint }, { status: 500 })
   return NextResponse.json(data ?? [])
 }
 

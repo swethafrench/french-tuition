@@ -89,7 +89,7 @@ export default function SchedulePage() {
 
       const [sRes, oRes] = await Promise.all([
         api.get('/api/students-with-batch'),
-        api.get('/api/batch-overrides', { params: { month: monthStr } }),
+        api.get('/api/batch-overrides', { params: { date: date.toISOString().split('T')[0] } }),
       ])
 
       const s: Student[] = sRes.data ?? []
@@ -134,7 +134,7 @@ export default function SchedulePage() {
   const handleRemoveOverride = async (studentId: string) => {
     if (!selectedDay || !selectedBatch) return
     const dateStr = selectedDay.toISOString().split('T')[0]
-    const oRes = await api.get('/api/batch-overrides', { params: { month: monthStr } })
+    const oRes = await api.get('/api/batch-overrides', { params: { date: date.toISOString().split('T')[0] } })
     const ov = (oRes.data as BatchOverride[]).find(o => o.student_id === studentId && o.override_date === dateStr)
     if (!ov) return
     await api.delete('/api/batch-overrides', { data: { id: ov.id } })
